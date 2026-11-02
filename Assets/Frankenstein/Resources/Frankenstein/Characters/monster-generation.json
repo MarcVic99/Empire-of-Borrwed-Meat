@@ -1,0 +1,13 @@
+{
+  "mode": "built-in image_gen",
+  "prompts": [
+    [
+      "wolf",
+      "Transparent PNG 2D game sprite sheet, three equal columns, full-body STRICT FRONT, STRICT BACK, THREE-QUARTER presentation of the SAME creature. Isolated silhouettes on transparent empty space, no environment, no backdrop, no ground, no shadow, no gradient. Dark fantasy, grotesque deformed silhouette, simple flat hand-painted shapes, limited muted palette, few details, clean readable shapes, no gore or blood or wounds. Feet one baseline, generous transparent margins between columns, complete weapons/body inside own column, limbs separated. A hunched monstrous wolf humanoid with a huge crooked head and narrow muzzle, bony masklike face, asymmetrically long forearms, powerful clawed hands, bent skinny legs. Dirty bone, gray olive fur, charcoal scraps of cloth. Frightening, unpleasant, not cute. Both arms and two legs distinct. No text."
+    ],
+    [
+      "ghoul",
+      "Transparent PNG 2D game sprite sheet, three equal columns, full-body STRICT FRONT, STRICT BACK, THREE-QUARTER presentation of the SAME creature. Isolated silhouettes on transparent empty space, no environment, no backdrop, no ground, no shadow, no gradient. Dark fantasy, grotesque deformed silhouette, simple flat hand-painted shapes, limited muted palette, few details, clean readable shapes, no gore or blood or wounds. Feet one baseline, generous transparent margins between columns, complete weapons/body inside own column, limbs separated. A grotesque fully clothed grave ghoul with gray-green intact skin, crooked enormous jaw and sunken face, long tilted neck, humped shoulders, two unnaturally elongated arms with clawlike hands, mismatched bent legs, ragged charcoal burial tunic and wraps, flat dry red PAINT on cloth. Unpleasant monstrous adult humanoid, simple readable silhouette. No text."
+    ]
+  ]
+}

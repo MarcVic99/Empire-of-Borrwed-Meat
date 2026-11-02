@@ -1,0 +1,23 @@
+{
+  "mode": "built-in image_gen",
+  "assets": [
+    {
+      "key": "topdown-dancer",
+      "reference": "C:\\Users\\Usuario.DESKTOP-RPUT52S\\Documents\\GitHub\\TFG-Tren\\Assets\\Frankenstein\\Resources\\Frankenstein\\Characters\\dancer.png",
+      "prompt": "Use case stylized-concept. Create a NEW 2D exploration animation sprite sheet of the character in the reference (reference is identity/costume only). Transparent background. EXACTLY 4 columns by 4 rows, 16 equal square cells, no text, no grid lines. Overhead TOP DOWN RPG camera, looking down at 60 degrees, small readable hand painted dark fantasy sprites, NOT frontal battle art. Every cell complete full-body same scale centered and feet same baseline inside cell, ample transparent gaps. Row 1 facing SOUTH toward bottom of sheet; row 2 facing WEST; row 3 facing EAST; row 4 facing NORTH away. In each row columns are: 1 idle neutral feet together, 2 walk left leg forward right back, 3 idle breathing slightly lowered shoulders, 4 walk right leg forward left back. Noticeably different alternating legs, moving arms and cloth; no extra limbs. Keep same masked adult identity, costume colors and equipment of reference. Clean simplified forms and dark outlines readable at 64 pixels, non-chibi, no blood or gore. Only character cutouts on true alpha, no backdrop/shadows/vignette."
+    },
+    {
+      "key": "topdown-grafter",
+      "reference": "C:\\Users\\Usuario.DESKTOP-RPUT52S\\Documents\\GitHub\\TFG-Tren\\Assets\\Frankenstein\\Resources\\Frankenstein\\Characters\\grafter.png",
+      "prompt": "Use case stylized-concept. Create a NEW 2D exploration animation sprite sheet of the character in the reference (reference is identity/costume only). Transparent background. EXACTLY 4 columns by 4 rows, 16 equal square cells, no text, no grid lines. Overhead TOP DOWN RPG camera, looking down at 60 degrees, small readable hand painted dark fantasy sprites, NOT frontal battle art. Every cell complete full-body same scale centered and feet same baseline inside cell, ample transparent gaps. Row 1 facing SOUTH toward bottom of sheet; row 2 facing WEST; row 3 facing EAST; row 4 facing NORTH away. In each row columns are: 1 idle neutral feet together, 2 walk left leg forward right back, 3 idle breathing slightly lowered shoulders, 4 walk right leg forward left back. Noticeably different alternating legs, moving arms and cloth; no extra limbs. Keep same masked adult identity, costume colors and equipment of reference. Clean simplified forms and dark outlines readable at 64 pixels, non-chibi, no blood or gore. Only character cutouts on true alpha, no backdrop/shadows/vignette."
+    },
+    {
+      "key": "panel",
+      "prompt": "Use case stylized-concept. Production UI asset: one rectangular landscape dark fantasy menu PANEL, straight-on orthographic, complete rectangle in image, charcoal worn leather and dark patinated metal, very restrained antique brass edge trim, simple angular corner details reminiscent of sewing needles, muted bone and olive accents. Large empty almost-black center with subtle material grain suitable behind crisp readable text. Clean readable premium game UI, austere ominous dungeon mood, no excessive ornament, no skulls in center, no text, no letters, no icons, no mockup scene. Flat 2D texture. Opaque background, all canvas is panel surface."
+    },
+    {
+      "key": "props",
+      "prompt": "Use case stylized-concept. Production top-down 2D dark fantasy dungeon PROP SPRITE ATLAS, transparent background. Exactly FOUR equal columns and TWO equal rows, EIGHT equal square cells. One complete isolated prop per cell, centered, ample transparent gutters, no shadows outside props, no text, no lines. Top-down RPG view at 60 degree overhead, hand-painted simple clean readable shapes, charcoal stone, worn tan wood, tarnished brass, muted amber lights, no blood or gore. Row1 col1 closed iron-bound treasure chest; row1 col2 same chest opened with a few coins; row1 col3 grafting workbench with neatly arranged bone-colored tools and folded cloth, no body; row1 col4 antique lectern with open book and parchment. Row2 col1 lit stone brazier amber flame; row2 col2 cluster two wooden crates and sacks; row2 col3 circular stone puzzle altar with three simple glyphs; row2 col4 descending stone stairs inset in a square opening. Match a grim monstrous fantasy dungeon game."
+    }
+  ]
+}

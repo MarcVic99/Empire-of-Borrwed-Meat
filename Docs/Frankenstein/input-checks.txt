@@ -1,0 +1,29 @@
+Controles del prototipo — 2026-11-02
+Comprobaciones dentro de Unity Play Mode mediante eventos de Game View:
+
+PASS Game View movement D dx=0,613701906055212 dy=0
+PASS Game View movement A dx=-0,588359791785479 dy=0
+PASS Game View movement W dx=0 dy=-0,603493448346853
+PASS Game View movement S dx=0 dy=0,569879774004221
+PASS Game View movement RightArrow dx=0,582984503358603 dy=0
+PASS Game View movement LeftArrow dx=-0,595090284943581 dy=0
+PASS Game View movement UpArrow dx=0 dy=-0,584417391568422
+PASS Game View movement DownArrow dx=0 dy=0,567860301584005
+PASS Key release stops movement
+PASS Tab opens menu
+PASS Held Tab does not toggle twice
+PASS Movement paused in menu
+PASS Escape closes menu
+PASS E collects threads
+PASS Held E does not repeat interaction
+PASS E opens graft table
+PASS Dialogue displayed
+PASS Space respects minimum reading time
+PASS Space advances dialogue
+PASS Player loop advances
+ALL PLAY INPUT CHECKS PASSED
+
+PASS Native KeyboardState D moves through Poll/Update
+PASS Focus loss clears movement and pending actions
+
+Las pruebas del teclado nativo usan KeyboardState inyectado. Las pruebas de ratón mediante SendEvent no reprodujeron un clic y no se consideran verificadas.
