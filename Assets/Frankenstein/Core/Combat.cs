@@ -80,10 +80,14 @@ namespace Frankenstein
             log.Add($"{Current.Name} emplea su turno en lanzar a {ally.Name}. Tiene un único ataque este combate.");
             ally.IsThrown = true; Current = ally; TurnCount++; return true;
         }
+        // Optional presentation hooks. Headless battles resolve synchronously.
+        public Action<Creature, Creature, BodySlot, ActionDefinition, Action> PresentAttack { get; set; }
+        public Action<Creature, int> DamagePresented { get; set; }
+        public bool HoldingImpact { get; set; }
         public bool DeferTurnsForDialogue { get; set; }
         private bool advancePending;
-        private void AdvanceOrWait() { if (DeferTurnsForDialogue && dialogue.Count > 0) advancePending = true; else Advance(); }
-        public void ResumeAfterDialogue() { if (advancePending && dialogue.Count == 0) { advancePending = false; Advance(); } }
+        private void AdvanceOrWait() { if (HoldingImpact || DeferTurnsForDialogue && dialogue.Count > 0) advancePending = true; else Advance(); }
+        public void ResumeAfterDialogue() { if (advancePending && !HoldingImpact && dialogue.Count == 0) { advancePending = false; Advance(); } }
         private void FinishAction() { if (Current != null && Current.IsThrown) Current.ThrownAttackSpent = true; AdvanceOrWait(); }
         private readonly List<Creature> creatures;
         private readonly Queue<Creature> turns = new Queue<Creature>();
@@ -191,7 +195,19 @@ namespace Frankenstein
         }
         private bool ExecuteAction(ActionDefinition action, BodySlot source, Creature target, BodySlot targetSlot)
         {
-            if (Current.IsThrown && (Current.ThrownAttackSpent || action.Kind != ActionKind.Attack)) return false;
+            if (HoldingImpact || advancePending || Current.IsThrown && (Current.ThrownAttackSpent || action.Kind != ActionKind.Attack)) return false;
+            if (action.Kind == ActionKind.Attack && PresentAttack != null)
+            {
+                if (!ValidAttack(target) || target.GetPiece(targetSlot) == null) return false;
+                HoldingImpact = true;
+                PresentAttack(Current, target, targetSlot, action, () => ResolveAction(action, source, target, targetSlot));
+                return true;
+            }
+            return ResolveAction(action, source, target, targetSlot);
+        }
+
+        private bool ResolveAction(ActionDefinition action, BodySlot source, Creature target, BodySlot targetSlot)
+        {
             if (action.Kind == ActionKind.Block)
             {
                 Current.Blocking = true;
@@ -322,6 +338,7 @@ namespace Frankenstein
                 else if (count == 2) RecruitmentHint(target);
             }
             var cut = target.TakeDamage(slot, damage);
+            if (damage > 0) DamagePresented?.Invoke(target, damage);
             log.Add($"{source} → {target.Name}, {slot}: {damage} daño.");
             if (cut != null)
             {

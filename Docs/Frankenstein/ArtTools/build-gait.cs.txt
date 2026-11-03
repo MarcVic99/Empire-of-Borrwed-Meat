@@ -1,0 +1,118 @@
+const int size = 96, padding = 8, cell = size + padding * 2, frames = 8;
+const string root = "Assets/Frankenstein/Resources/Frankenstein/Imperio/";
+const string clips = "Assets/Frankenstein/Art/Imperio/Animations/";
+var roles = new[] { Frankenstein.Profession.Hunter, Frankenstein.Profession.Dancer, Frankenstein.Profession.Grafter };
+var directions = new[] { "south", "west", "east", "north" };
+foreach (var role in roles)
+{
+    string id = Frankenstein.Presentation.ImperialArt.Role(role);
+    var original = new UnityEngine.Texture2D(2, 2);
+    UnityEngine.ImageConversion.LoadImage(original, System.IO.File.ReadAllBytes(root + "walk-" + id + ".png"));
+    var atlas = new UnityEngine.Texture2D(cell * frames, cell * 4, UnityEngine.TextureFormat.RGBA32, false);
+    var pixels = new UnityEngine.Color32[cell * frames * cell * 4];
+    for (int row = 0; row < 4; row++)
+    {
+        var uv = Frankenstein.Presentation.ExplorationArt.FrameUV(role, row, 0);
+        var source = new UnityEngine.Color32[size * size];
+        int footLeft = size, footRight = 0;
+        for (int y = 0; y < size; y++)
+        for (int x = 0; x < size; x++)
+        {
+            var color = original.GetPixel(
+                UnityEngine.Mathf.FloorToInt((uv.x + (x + .5f) / size * uv.width) * original.width),
+                UnityEngine.Mathf.FloorToInt((uv.y + (size - y - .5f) / size * uv.height) * original.height));
+            source[y * size + x] = color;
+            if (y > 82 && color.a > .5f) { footLeft = System.Math.Min(x, footLeft); footRight = System.Math.Max(x, footRight); }
+        }
+        bool profile = row == 1 || row == 2;
+        float seam = footLeft < footRight ? (footLeft + footRight) * .5f : size * .5f;
+        for (int frame = 0; frame < frames; frame++)
+        {
+            float phase = (frame + 1) * UnityEngine.Mathf.PI / 4;
+            int lead = (row == 2 || row == 3) ? -1 : 1;
+            float stride = UnityEngine.Mathf.Sin(phase) * lead;
+            int advance = UnityEngine.Mathf.Abs(stride) > .85f ? 1 : 0;
+            var pose = new UnityEngine.Color32[cell * cell];
+            for (int pass = 0; pass < 2; pass++)
+            {
+                bool right = pass == (stride >= 0 ? 1 : 0);
+                float swing = stride * (right ? 1 : -1);
+                float lift = UnityEngine.Mathf.Max(0, UnityEngine.Mathf.Cos(phase) * (right ? lead : -lead));
+                for (int y = -padding; y < size + padding; y++)
+                {
+                    float leg = UnityEngine.Mathf.SmoothStep(0, 1, (y - 55f) / 32f);
+                    int dx = profile ? UnityEngine.Mathf.RoundToInt(swing * 7 * leg) : 0;
+                    int dy = UnityEngine.Mathf.RoundToInt((profile ? -lift * 4 : swing * (row == 0 ? 5 : -5) - lift * 3) * leg);
+                    // Reverse the warp per row to avoid holes between sprite pixels.
+                    int sy = y - dy + (profile ? 0 : row == 0 ? -advance : advance);
+                    if (sy < 0 || sy >= size) continue;
+                    for (int x = -padding; x < size + padding; x++)
+                    {
+                        int sx = x - dx - (profile ? (row == 1 ? -advance : advance) : 0);
+                        if (sx < 0 || sx >= size || (sx >= seam) != right) continue;
+                        var color = source[sy * size + sx];
+                        if (color.a < 48) continue;
+                        // The far foot reads as the far foot even at map scale.
+                        if (profile && (right == (row == 1)) && sy > 77)
+                        {
+                            color.r = (byte)(color.r * .83f);
+                            color.g = (byte)(color.g * .83f);
+                            color.b = (byte)(color.b * .83f);
+                        }
+                        pose[(y + padding) * cell + x + padding] = color;
+                    }
+                }
+            }
+            for (int y = 0; y < cell; y++)
+            for (int x = 0; x < cell; x++)
+                pixels[((4 - row) * cell - y - 1) * cell * frames + frame * cell + x] = pose[y * cell + x];
+        }
+    }
+    atlas.SetPixels32(pixels); atlas.Apply();
+    string path = root + "gait-" + id + ".png";
+    System.IO.File.WriteAllBytes(path, UnityEngine.ImageConversion.EncodeToPNG(atlas));
+    UnityEngine.Object.DestroyImmediate(atlas); UnityEngine.Object.DestroyImmediate(original);
+    UnityEditor.AssetDatabase.ImportAsset(path, UnityEditor.ImportAssetOptions.ForceSynchronousImport);
+    var importer = (UnityEditor.TextureImporter)UnityEditor.AssetImporter.GetAtPath(path);
+    importer.textureType = UnityEditor.TextureImporterType.Sprite;
+    importer.spriteImportMode = UnityEditor.SpriteImportMode.Multiple;
+    importer.spritePixelsPerUnit = 64f * size / 314f;
+    importer.filterMode = UnityEngine.FilterMode.Point;
+    importer.mipmapEnabled = false;
+    importer.npotScale = UnityEditor.TextureImporterNPOTScale.None;
+    importer.textureCompression = UnityEditor.TextureImporterCompression.Uncompressed;
+    var factory = new UnityEditor.U2D.Sprites.SpriteDataProviderFactories(); factory.Init();
+    var provider = factory.GetSpriteEditorDataProviderFromObject(importer); provider.InitSpriteEditorDataProvider();
+    var prior = provider.GetSpriteRects();
+    var records = new UnityEditor.SpriteRect[frames * 4];
+    for (int row = 0; row < 4; row++)
+    for (int frame = 0; frame < frames; frame++)
+    {
+        string name = id + "-" + directions[row] + "-" + frame;
+        var old = System.Array.Find(prior, sprite => sprite.name == name);
+        records[row * frames + frame] = new UnityEditor.SpriteRect {
+            name = name, spriteID = old == null ? UnityEngine.GUID.Generate() : old.spriteID,
+            rect = new UnityEngine.Rect(frame * cell, (3 - row) * cell, cell, cell),
+            pivot = new UnityEngine.Vector2(.5f, padding / (float)cell), alignment = UnityEngine.SpriteAlignment.Custom
+        };
+    }
+    provider.SetSpriteRects(records);
+    var ids = provider.GetDataProvider<UnityEditor.U2D.Sprites.ISpriteNameFileIdDataProvider>();
+    ids.SetNameFileIdPairs(System.Linq.Enumerable.Select(records, sprite => new UnityEditor.SpriteNameFileIdPair(sprite.name, sprite.spriteID)));
+    provider.Apply(); importer.SaveAndReimport();
+    var sprites = System.Linq.Enumerable.ToDictionary(System.Linq.Enumerable.OfType<UnityEngine.Sprite>(UnityEditor.AssetDatabase.LoadAllAssetsAtPath(path)), s => s.name);
+    for (int row = 0; row < 4; row++)
+    {
+        var clip = UnityEditor.AssetDatabase.LoadAssetAtPath<UnityEngine.AnimationClip>(clips + id + "-walk-" + directions[row] + ".anim");
+        clip.frameRate = 12;
+        var keys = new UnityEditor.ObjectReferenceKeyframe[frames + 1];
+        for (int i = 0; i <= frames; i++) keys[i] = new UnityEditor.ObjectReferenceKeyframe { time = i / 12f, value = sprites[id + "-" + directions[row] + "-" + (i % frames)] };
+        var binding = new UnityEditor.EditorCurveBinding { type = typeof(UnityEngine.SpriteRenderer), propertyName = "m_Sprite" };
+        UnityEditor.AnimationUtility.SetObjectReferenceCurve(clip, binding, keys);
+        UnityEditor.AnimationUtility.SetEditorCurve(clip, new UnityEditor.EditorCurveBinding { type = typeof(UnityEngine.SpriteRenderer), propertyName = "m_FlipX" }, null);
+        UnityEditor.AnimationUtility.SetEditorCurve(clip, new UnityEditor.EditorCurveBinding { path = "Head", type = typeof(UnityEngine.GameObject), propertyName = "m_IsActive" }, UnityEngine.AnimationCurve.Constant(0, frames / 12f, 0));
+        UnityEditor.EditorUtility.SetDirty(clip);
+    }
+}
+UnityEditor.AssetDatabase.SaveAssets();
+return "96 gait poses and 12 walk clips";

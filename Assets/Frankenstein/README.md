@@ -82,3 +82,6 @@ Se generaron con image_gen integrado. `Resources/Frankenstein/revision-cast-gene
 `Frankenstein > Comprobar prototipo completo` ejecuta `PrototypeChecks.RunAll()`. Comprueba equipo independiente y arcos a dos manos, pérdida de acciones, hilos y mesas, torsos no inventariables, debilidades de clase y afinidades, rendición exacta, furia, huida y retirada sin recompensa, fuego amigo, ataques a rendidos, botín limitado, abandono/muerte de aliados, lanzamiento, mapas, IA, lore, puzles y progresión con las tres clases. También comprueba que las cuatro celdas norte de los nuevos atlas no corten la silueta y que los turnos esperen al diálogo.
 
 Los recorridos de campaña pasan turnos enemigos para aislar progresión; otras simulaciones usan IA real. La dificultad final requiere partidas de equilibrio. Core no depende de Unity y no se añaden paquetes. Guardado y audio siguen pendientes.
+
+## Dirección visual: El Imperio de la Carne Prestada
+El conjunto activo y sus 32 clips se documentan en `Assets/Frankenstein/Art/Imperio/README.md`. Los prompts y rutas están en `Resources/Frankenstein/Imperio/imperio-generation.json`. Paquete importable: `Docs/Frankenstein/Imperio-Assets-v2.unitypackage`.

@@ -223,8 +223,10 @@ public static class PrototypeChecks
         foreach (var role in new[] { Profession.Hunter, Profession.Dancer, Profession.Grafter })
         {
             string name = role == Profession.Hunter ? "topdown-hunter" : role == Profession.Dancer ? "topdown-dancer-v2" : "topdown-grafter-v2";
+            string imperial = "Assets/Frankenstein/Resources/Frankenstein/Imperio/walk-" + Frankenstein.Presentation.ImperialArt.Role(role) + ".png";
+            string path = System.IO.File.Exists(imperial) ? imperial : "Assets/Frankenstein/Resources/Frankenstein/Exploration/" + name + ".png";
             var texture = new UnityEngine.Texture2D(2, 2);
-            UnityEngine.ImageConversion.LoadImage(texture, System.IO.File.ReadAllBytes("Assets/Frankenstein/Resources/Frankenstein/Exploration/" + name + ".png"));
+            UnityEngine.ImageConversion.LoadImage(texture, System.IO.File.ReadAllBytes(path));
             for (int frame = 0; frame < 4; frame++)
             {
                 var uv = Frankenstein.Presentation.ExplorationArt.FrameUV(role, 3, frame);

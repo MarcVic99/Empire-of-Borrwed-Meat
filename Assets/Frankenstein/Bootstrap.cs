@@ -19,7 +19,6 @@ public sealed partial class Bootstrap : MonoBehaviour
     private float enemyAt;
     private GUIStyle label, small, heading, button, centered;
     private int fontSize;
-    private string seedText;
     private Profession selectedClass = Profession.Hunter;
     private Creature hunterPreview, dancerPreview, grafterPreview;
     private readonly Color muted = new Color(.62f, .65f, .62f);
@@ -43,7 +42,7 @@ public sealed partial class Bootstrap : MonoBehaviour
     {
         controls.Reset(); clearGuiFocus = true;
         seed = Guid.NewGuid().GetHashCode() & int.MaxValue; worldMenu = puzzleMenu = false; worldTab = 0;
-        Run = null; observed = null; spoken = null; seedText = seed.ToString(); scroll = Vector2.zero; member = null; selectedGear = null;
+        Run = null; observed = null; spoken = null; scroll = Vector2.zero; member = null; selectedGear = null;
         hunterPreview = Content.Hero(Profession.Hunter); dancerPreview = Content.Hero(Profession.Dancer); grafterPreview = Content.Hero(Profession.Grafter);
     }
     private void StartRun(Profession profession)
@@ -51,7 +50,14 @@ public sealed partial class Bootstrap : MonoBehaviour
     private void SyncBattle()
     {
         if (observed == Battle) return;
-        observed = Battle; if (Battle != null) Battle.DeferTurnsForDialogue = true; ability = null; target = executionTarget = null; graft = null; spoken = null;
+        observed = Battle;
+        ResetBattleMotion();
+        if (Battle != null)
+        {
+            Battle.DeferTurnsForDialogue = true;
+            Battle.PresentAttack = BeginStrike;
+            Battle.DamagePresented = ShowDamage;
+        } ability = null; target = executionTarget = null; graft = null; spoken = null;
         menu = Menu.Main; scroll = Vector2.zero; enemyAt = Time.unscaledTime + .9f;
     }
     private bool UpdateSpeech()
@@ -71,7 +77,11 @@ public sealed partial class Bootstrap : MonoBehaviour
         controls.Poll();
         if (Run == null) return;
         if (Run.State == CampaignState.Exploring) { spoken = null; UpdateExploration(); return; }
-        SyncBattle(); if (Battle != null && UpdateSpeech()) return;
+        SyncBattle();
+        UpdateBattleCamera();
+        if (UpdateStrike()) return;
+        if (Battle != null && UpdateSpeech()) return;
+        if (cameraZoom > 1.004f) return;
         RefreshPresentation();
         if (Run.State == CampaignState.Exploring) { worldCamera = new Vector2((float)Run.Dungeon.X, (float)Run.Dungeon.Y); return; }
         if (Battle != null && !Battle.IsOver && !PlayerTurn && Time.unscaledTime >= enemyAt && menu != Menu.Log && menu != Menu.Inventory)
@@ -104,12 +114,13 @@ public sealed partial class Bootstrap : MonoBehaviour
         Styles(); BattlePainter.Fill(new Rect(0, 0, Screen.width, Screen.height), BattlePainter.Ink);
         if (Run == null) { DrawSelection(new Rect(16, 12, Screen.width - 32, Screen.height - 24)); return; }
         if (Run.State == CampaignState.Exploring) { DrawDungeon(); return; }
-        if (spoken == null && Battle != null) { SyncBattle(); UpdateSpeech(); }
-        if (spoken != null) { BattlePainter.Arena(new Rect(0, 0, Screen.width, Screen.height)); DrawFocusedSpeech(); return; }
-        RefreshPresentation();
+
         if (Run.IsFinished) { DrawFinal(new Rect(20, 20, Screen.width - 40, Screen.height - 40)); return; }
         if (Run.State == CampaignState.Exploring) { DrawDungeon(); return; }
         DrawArena(new Rect(0, 0, Screen.width, Screen.height));
+        DrawAllyVitals();
+        if (spoken != null) { DrawFocusedSpeech(); return; }
+        if (BattleInputLocked) return;
         Text(new Rect(20, 8, Screen.width * .65f, 30), $"Piso {Run.Dungeon.Floor} · Ronda {Battle.Round}", small, muted);
         if (Btn(new Rect(Screen.width - 122, 10, 102, 30), "Registro")) Go(Menu.Log);
         if (menu == Menu.Inventory || menu == Menu.Log || menu == Menu.Offer) DrawBattleOverlay();
@@ -121,7 +132,15 @@ public sealed partial class Bootstrap : MonoBehaviour
         style.normal.textColor = color ?? BattlePainter.Paper; GUI.contentColor = Color.white; GUI.Label(r, value, style); style.normal.textColor = old; GUI.contentColor = oldContent;
     }
     private bool Btn(Rect r, string value, bool enabled = true, bool emphasis = false)
-    { button.fontSize = r.width < 95 ? small.fontSize : fontSize; return ButtonSkin.Draw(r, value, enabled, emphasis, button); }
+    { button.fontSize = r.width < 150 ? small.fontSize : fontSize; return ButtonSkin.Draw(r, value, enabled, emphasis, button); }
+    private bool ItemButton(Rect r, string id, string value, bool enabled = true, bool selected = false)
+    {
+        bool clicked = Btn(r, "", enabled, selected);
+        float size = Mathf.Min(46, r.height - 8);
+        ImperialArt.Icon(id, new Rect(r.x + 7, r.center.y - size / 2, size, size));
+        Text(new Rect(r.x + size + 15, r.y + 3, r.width - size - 22, r.height - 6), value, small, enabled ? BattlePainter.Paper : muted);
+        return clicked;
+    }
     private Rect Cell(Rect r, int index, int columns, int count)
     { columns = Mathf.Max(1, columns); int rows = Mathf.Max(1, Mathf.CeilToInt((float)count / columns)); float w = (r.width - (columns - 1) * 7) / columns, h = (r.height - (rows - 1) * 6) / rows; return new Rect(r.x + index % columns * (w + 7), r.y + index / columns * (h + 6), w, h); }
     private void Go(Menu next) { menu = next; scroll = Vector2.zero; GUIUtility.ExitGUI(); }

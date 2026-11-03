@@ -8,6 +8,7 @@ public sealed partial class Bootstrap
 {
     private bool worldMenu, puzzleMenu, walking;
     private int worldTab, facing;
+    private float walkDistance;
     private Vector2 worldCamera;
     private string puzzleFeedback = "";
     private readonly string[] worldTabs = { "Mapa", "Personajes", "Objetos", "Injertos", "Equipo", "Diario" };
@@ -16,6 +17,7 @@ public sealed partial class Bootstrap
         float x = controls.Movement.x, y = controls.Movement.y;
         bool interact = (controls.Pressed & GameButton.Interact) != 0, toggle = (controls.Pressed & GameButton.Menu) != 0;
         if (toggle) { if (puzzleMenu) puzzleMenu = false; else worldMenu = !worldMenu; }
+        bool wasWalking = walking;
         walking = false;
         float dt = Mathf.Min(Time.unscaledDeltaTime, .05f);
         if (!worldMenu && !puzzleMenu)
@@ -23,8 +25,15 @@ public sealed partial class Bootstrap
             var movement = new Vector2(x, y).normalized * dt * 3.5f;
             double oldX = Run.Dungeon.X, oldY = Run.Dungeon.Y;
             Run.Dungeon.Move(movement.x, movement.y);
-            walking = Dungeon.Distance(oldX, oldY, Run.Dungeon.X, Run.Dungeon.Y) > .001;
-            if (walking) facing = Mathf.Abs(x) > Mathf.Abs(y) ? (x < 0 ? 1 : 2) : y < 0 ? 3 : 0;
+            float travelled = (float)Dungeon.Distance(oldX, oldY, Run.Dungeon.X, Run.Dungeon.Y);
+            walking = travelled > .001f;
+            if (walking)
+            {
+                int direction = Mathf.Abs(x) > Mathf.Abs(y) ? (x < 0 ? 1 : 2) : y < 0 ? 3 : 0;
+                if (!wasWalking || direction != facing) walkDistance = 0;
+                facing = direction;
+                walkDistance = Mathf.Repeat(walkDistance + travelled, 7f / 3f);
+            }
             if (interact) HandleInteraction();
             Run.Dungeon.Tick(dt);
             if (Run.BeginEncounter()) { SyncBattle(); return; }
@@ -38,39 +47,6 @@ public sealed partial class Bootstrap
         if (oldFloor != Run.Dungeon.Floor) { worldCamera = new Vector2((float)Run.Dungeon.X, (float)Run.Dungeon.Y); facing = 0; }
         if (result == "grafts") { worldMenu = true; worldTab = 3; graft = null; member = null; }
         else if (result == "puzzle") { puzzleMenu = true; puzzleFeedback = "Recuerda el orden de la nota del vestíbulo."; }
-    }
-    private void DrawSelection(Rect r)
-    {
-        Text(new Rect(r.x + 12, r.y, r.width - 24, 39), "ELIGE QUIÉN DESCIENDE", heading, BattlePainter.Gold);
-        Text(new Rect(r.x + 12, r.y + 40, r.width - 24, 28), "Cada clase tiene una ventaja y un precio.", small, muted);
-        var cards = new Rect(r.x + 8, r.y + 80, r.width - 16, r.height - 155);
-        var roles = new[] { Profession.Hunter, Profession.Dancer, Profession.Grafter };
-        string[] tags = { "COMBATE", "EVASIÓN", "COSTURA" };
-        string[] specialties = { "Presión de caza", "Danza cautivadora", "Injertos de campo" };
-        string[] details = { "Más daño y rendiciones. No puede reclutar a quien ya se ha rendido.", "Alta evasión, poca defensa y daño. Seduce mejor a hombres, especialmente humanos.", "Cose sin mesa y gasta 1 hilo; los demás, 2. Le cuesta más convencer." };
-        string[] kits = { "Espada · Daga", "Cintas · Daga", "Sierra · Aguja" };
-        for (int i = 0; i < 3; i++)
-        {
-            var c = Cell(cards, i, 3, 3); bool selected = selectedClass == roles[i];
-            if (Btn(c, "", true, selected)) selectedClass = roles[i];
-            Text(new Rect(c.x + 18, c.y + 13, c.width - 36, 25), tags[i] + (selected ? "  /  ELEGIDO" : ""), small, BattlePainter.Gold);
-            Text(new Rect(c.x + 18, c.y + 39, c.width - 36, 35), ClassName(roles[i]).ToUpperInvariant(), heading);
-            var preview = i == 0 ? hunterPreview : i == 1 ? dancerPreview : grafterPreview;
-            float lift = c.Contains(Event.current.mousePosition) ? Mathf.Sin(Time.unscaledTime * 2) * 2 : 0;
-            CharacterArt.Draw(preview, new Rect(c.x + 18, c.y + 75 + lift, c.width - 36, c.height * .53f), 2);
-            float info = c.y + c.height * .69f;
-            BattlePainter.Fill(new Rect(c.x + 19, info - 9, c.width - 38, 1), BattlePainter.Gold * .5f);
-            Text(new Rect(c.x + 20, info, c.width - 40, 28), specialties[i], label, BattlePainter.Gold);
-            Text(new Rect(c.x + 20, info + 30, c.width - 40, c.height * .17f), details[i], small);
-            Text(new Rect(c.x + 20, c.yMax - 37, c.width - 40, 25), kits[i], small, muted);
-        }
-        var footer = new Rect(r.x + 8, r.yMax - 62, r.width - 16, 58); ExplorationArt.Panel(footer);
-        Text(new Rect(footer.x + 16, footer.y + 6, 100, 16), "SEMILLA", small, muted);
-        seedText = GUI.TextField(new Rect(footer.x + 15, footer.y + 25, 130, 26), seedText ?? seed.ToString());
-        if (Btn(new Rect(footer.x + 155, footer.y + 13, 118, 34), "Otra semilla")) seedText = (Guid.NewGuid().GetHashCode() & int.MaxValue).ToString();
-        int parsed; bool valid = int.TryParse(seedText, out parsed);
-        if (Btn(new Rect(footer.x + 285, footer.y + 10, footer.width - 300, 40), "DESCENDER COMO " + ClassName(selectedClass).ToUpperInvariant() + "  →", valid, true))
-        { seed = parsed; worldCamera = Vector2.zero; facing = 0; StartRun(selectedClass); GUIUtility.ExitGUI(); }
     }
     private void DrawDungeon()
     {
@@ -87,10 +63,10 @@ public sealed partial class Bootstrap
             if (!d.IsWalkable(x + .5, y + .5, 0)) continue;
             var p = screen(x, y); var tile = new Rect(p.x, p.y, scale + 1, scale + 1);
             float variation = ((x * 13 + y * 7) & 3) * .009f;
-            BattlePainter.Fill(tile, new Color(.18f + variation, .18f + variation, .155f + variation));
-            BattlePainter.Border(tile, new Color(.105f, .11f, .095f), 1);
-            if (((x * 3 + y * 7) & 15) == 0) BattlePainter.Line(new Vector2(tile.x + 8, tile.y + 5), new Vector2(tile.x + 19, tile.y + 15), new Color(.11f, .115f, .10f));
-            if (!d.IsWalkable(x + .5, y - .5, 0)) { BattlePainter.Fill(new Rect(tile.x, tile.y - scale * .30f, tile.width, scale * .30f), new Color(.23f, .23f, .20f)); BattlePainter.Fill(new Rect(tile.x, tile.y, tile.width, 5), new Color(0, 0, 0, .4f)); }
+            if (!ImperialArt.Draw("tiles", tile, (x * 13 + y * 7) & 3, 0, 4, 4))
+            { BattlePainter.Fill(tile, new Color(.18f + variation, .18f + variation, .155f + variation)); BattlePainter.Border(tile, new Color(.105f, .11f, .095f), 1); }
+            if (!d.IsWalkable(x + .5, y - .5, 0))
+            { var wall = new Rect(tile.x, tile.y - scale * .65f, tile.width, scale * .70f); if (!ImperialArt.Draw("tiles", wall, (x + y) & 3, 1, 4, 4)) BattlePainter.Fill(wall, new Color(.23f, .23f, .20f)); BattlePainter.Fill(new Rect(tile.x, tile.y, tile.width, 5), new Color(0, 0, 0, .4f)); }
             if (!d.IsWalkable(x - .5, y + .5, 0)) BattlePainter.Fill(new Rect(tile.x, tile.y, 5, tile.height), new Color(.055f, .06f, .05f));
             if (!d.IsWalkable(x + 1.5, y + .5, 0)) BattlePainter.Fill(new Rect(tile.xMax - 5, tile.y, 5, tile.height), new Color(.055f, .06f, .05f));
         }
@@ -99,9 +75,9 @@ public sealed partial class Bootstrap
             var a = screen(room.CenterX - 3.7, room.CenterY - 3.7);
             var b = screen(room.CenterX + 3.7, room.CenterY + 3.7);
             float flicker = .92f + .08f * Mathf.Sin(Time.unscaledTime * 5 + room.X);
-            BattlePainter.Oval(new Rect(a.x - scale * 2, a.y - scale * 2, scale * 4, scale * 4), new Color(.65f, .39f, .12f, .07f * flicker));
-            ExplorationArt.Prop(4, new Rect(a.x - scale * .6f, a.y - scale * .8f, scale * 1.2f, scale * 1.4f));
-            ExplorationArt.Prop(5, new Rect(b.x - scale * .8f, b.y - scale * .7f, scale * 1.5f, scale * 1.5f));
+            BattlePainter.Oval(new Rect(a.x - scale * 2, a.y - scale * 2, scale * 4, scale * 4), new Color(.47f, .32f, .21f, .05f * flicker));
+            ExplorationArt.Prop(4, new Rect(a.x - scale * .35f, a.y - scale * .72f, scale * .70f, scale * .80f));
+            ExplorationArt.Prop(5, new Rect(b.x - scale * .45f, b.y - scale * .72f, scale * .90f, scale * .90f));
         }
         foreach (var l in d.Landmarks.OrderBy(l => l.Y))
         {
@@ -112,21 +88,21 @@ public sealed partial class Bootstrap
                 continue;
             }
             int index = l.Kind == LandmarkKind.Chest ? (l.Used ? 1 : 0) : l.Kind == LandmarkKind.Table ? 2 : l.Kind == LandmarkKind.Lore ? 3 : l.Kind == LandmarkKind.Altar ? 6 : 7;
-            float size = l.Kind == LandmarkKind.Table ? 2.7f : l.Kind == LandmarkKind.Stairs ? 2.4f : 1.9f;
-            ExplorationArt.Prop(index, new Rect(p.x - scale * size / 2, p.y - scale * size * .65f, scale * size, scale * size));
+            float size = l.Kind == LandmarkKind.Table ? 1.65f : l.Kind == LandmarkKind.Stairs ? 1.50f : 1.06f;
+            ExplorationArt.Prop(index, new Rect(p.x - scale * size / 2, p.y - scale * size * .84f, scale * size, scale * size));
         }
         foreach (var enemy in d.Rooms.Where(r => r.HasEncounter).OrderBy(r => r.EnemyY))
         {
             var p = screen(enemy.EnemyX, enemy.EnemyY);
             if (p.x < -100 || p.x > viewport.width + 100 || p.y < -100 || p.y > viewport.height + 100) continue;
             BattlePainter.Oval(new Rect(p.x - scale * .7f, p.y - scale * .12f, scale * 1.4f, scale * .4f), new Color(0, 0, 0, .4f));
-            ExplorationArt.Enemy(enemy.Enemies[0], new Rect(p.x - scale * 1.1f, p.y - scale * 1.8f + Mathf.Sin((float)enemy.PatrolTime * 6) * 2, scale * 2.2f, scale * 2.2f));
+            ExplorationArt.Enemy(enemy.Enemies[0], new Rect(p.x - scale * 1.1f, p.y - scale * 1.8f + Mathf.Sin((float)enemy.PatrolTime * 6) * 2, scale * 2.2f, scale * 2.2f), (float)enemy.PatrolTime, enemy.EnemyX > d.X);
             string state = enemy.EnemyState == RoamingState.Pursue ? "¡TE HA VISTO!" : enemy.EnemyState == RoamingState.Flee ? "HUYE DE TI" : "PATRULLA";
             Text(new Rect(p.x - 85, p.y - scale * 1.95f, 170, 24), state, centered, enemy.EnemyState == RoamingState.Pursue ? new Color(.88f, .49f, .28f) : BattlePainter.Gold);
         }
         var player = screen(d.X, d.Y);
         BattlePainter.Oval(new Rect(player.x - scale * .55f, player.y - scale * .08f, scale * 1.1f, scale * .35f), new Color(0, 0, 0, .5f));
-        ExplorationArt.Player(Run.StartingClass, new Rect(player.x - scale * 1.1f, player.y - scale * 1.65f, scale * 2.2f, scale * 2.2f), facing, walking, Time.unscaledTime);
+        ExplorationArt.Player(Run.StartingClass, new Rect(player.x - scale * 1.1f, player.y - scale * 1.65f, scale * 2.2f, scale * 2.2f), facing, walking, Time.unscaledTime, walkDistance);
         if (!worldMenu && !puzzleMenu && d.Nearby != null)
         {
             var prompt = new Rect(player.x - 175, player.y + scale * .8f, 350, 35);
@@ -232,7 +208,7 @@ public sealed partial class Bootstrap
         var items = Run.Inventory.Equipment.ToArray();
         scroll = GUI.BeginScrollView(left, scroll, new Rect(0, 0, left.width - 20, Mathf.Max(left.height, items.Length * 66)));
         for (int i = 0; i < items.Length; i++)
-            if (Btn(new Rect(0, i * 66, left.width - 24, 60), items[i].Definition.Name + (items[i].Definition.Action == null ? "" : "\n" + items[i].Definition.Action.Name), true, selectedGear == items[i])) selectedGear = items[i];
+            if (ItemButton(new Rect(0, i * 66, left.width - 24, 60), items[i].Definition.Id, items[i].Definition.Name + (items[i].Definition.Action == null ? "" : "\n" + items[i].Definition.Action.Name), true, selectedGear == items[i])) selectedGear = items[i];
         if (items.Length == 0) Text(new Rect(10, 0, left.width - 30, 100), "No hay equipo en la mochila. Puedes quitar un objeto equipado o buscar en cofres y restos.", small);
         GUI.EndScrollView();
         var right = new Rect(body.x + body.width * .51f, body.y + 85, body.width * .49f, body.height - 85);
@@ -253,8 +229,8 @@ public sealed partial class Bootstrap
         for (int i = 0; i < pieces.Length; i++)
         {
             var row = new Rect(0, i * 82, r.width - 24, 76);
-            if (selectable) { if (Btn(row, PieceText(pieces[i]), true, graft == pieces[i])) graft = pieces[i]; }
-            else { ExplorationArt.Panel(row); Text(new Rect(12, row.y + 3, row.width - 24, row.height - 6), PieceText(pieces[i]), small); }
+            if (selectable) { if (ItemButton(row, pieces[i].Definition.Id, PieceText(pieces[i]), true, graft == pieces[i])) graft = pieces[i]; }
+            else { ExplorationArt.Panel(row); ImperialArt.Icon(pieces[i].Definition.Id, new Rect(7, row.y + 12, 46, 46)); Text(new Rect(62, row.y + 3, row.width - 69, row.height - 6), PieceText(pieces[i]), small); }
         }
         GUI.EndScrollView();
     }

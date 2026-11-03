@@ -1,0 +1,28 @@
+const string root = "Assets/Frankenstein/Resources/Frankenstein/Imperio/";
+var texture = new UnityEngine.Texture2D(2, 2);
+UnityEngine.ImageConversion.LoadImage(texture, System.IO.File.ReadAllBytes(root + "props-medium.png"));
+var pixels = texture.GetPixels32();
+for (int i = 0; i < pixels.Length; i++)
+{
+    var pixel = pixels[i];
+    float light = (pixel.r * .30f + pixel.g * .55f + pixel.b * .15f) / 255f;
+    float warmth = (pixel.r - pixel.b) / 255f;
+    float value = UnityEngine.Mathf.Pow(light, 1.08f);
+    float red = value * .87f + warmth * .11f;
+    float green = value * .79f;
+    float blue = value * .76f + .019f;
+    pixels[i] = new UnityEngine.Color32((byte)(255 * red), (byte)(255 * green), (byte)(255 * blue), pixel.a);
+}
+texture.SetPixels32(pixels); texture.Apply();
+string path = root + "props-muted.png";
+System.IO.File.WriteAllBytes(path, UnityEngine.ImageConversion.EncodeToPNG(texture));
+UnityEngine.Object.DestroyImmediate(texture);
+UnityEditor.AssetDatabase.ImportAsset(path, UnityEditor.ImportAssetOptions.ForceSynchronousImport);
+var importer = (UnityEditor.TextureImporter)UnityEditor.AssetImporter.GetAtPath(path);
+importer.filterMode = UnityEngine.FilterMode.Point;
+importer.mipmapEnabled = false;
+importer.npotScale = UnityEditor.TextureImporterNPOTScale.None;
+importer.textureCompression = UnityEditor.TextureImporterCompression.Uncompressed;
+importer.alphaIsTransparency = true;
+importer.SaveAndReimport();
+return "8 objects in muted iron, stone and burgundy";

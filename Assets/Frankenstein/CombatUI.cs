@@ -6,44 +6,115 @@ using UnityEngine;
 public sealed partial class Bootstrap
 {
     private Rect combatPanel;
+    private float actionRowHeight;
+    private Rect ActionPanel(int rows, float width)
+    {
+        var vitals = AllyVitalsRect;
+        float x = menu == Menu.Parts && anatomyPanel.width > 0 && anatomyPanel.x < Screen.width / 2f
+            ? anatomyPanel.xMax + 8 : 12;
+        width = Mathf.Min(width, Screen.width * .38f);
+        float bottom = x + width + 8 > vitals.x ? vitals.y - 8 : Screen.height - 12;
+        actionRowHeight = Mathf.Clamp((bottom - 48) / Mathf.Max(1, rows), 14, 36);
+        float height = 42 + Mathf.Max(1, rows) * actionRowHeight;
+        return new Rect(x, Mathf.Max(5, bottom - height), width, height);
+    }
+
     private Rect ListPanel(string title, int rows, float width = 310)
     {
-        float height = 54 + Mathf.Max(1, rows) * 36;
-        var r = new Rect(20, Screen.height - height - 18, Mathf.Min(width, Screen.width * .40f), height);
-        ExplorationArt.Panel(r, .95f); Text(new Rect(r.x + 14, r.y + 8, r.width - 28, 32), title, label, BattlePainter.Gold);
-        combatPanel = r; return new Rect(r.x + 9, r.y + 47, r.width - 18, r.height - 55);
+        combatPanel = ActionPanel(rows, width);
+        ExplorationArt.Panel(combatPanel, .96f);
+        Text(new Rect(combatPanel.x + 12, combatPanel.y + 4, combatPanel.width - 24, 28), title, label, BattlePainter.Gold);
+        return ActionArea(combatPanel);
     }
-    private bool Row(Rect area, int i, string text, bool enabled = true, bool selected = false) => Btn(new Rect(area.x, area.y + i * 36, area.width, 31), text, enabled, selected);
+
+    private static Rect ActionArea(Rect panel) => new Rect(panel.x + 8, panel.y + 35, panel.width - 16, panel.height - 41);
+    private Rect ActionRow(Rect area, int i) => new Rect(area.x, area.y + i * actionRowHeight, area.width, actionRowHeight - 2);
+    private bool Row(Rect area, int i, string text, bool enabled = true, bool selected = false) => Btn(ActionRow(area, i), text, enabled, selected);
+
     private void DrawArena(Rect r)
     {
-        BattlePainter.Arena(r);
-        var foes = Battle.Aftermath.Enemies.Where(e => !e.IsPlayer && !e.HasFled).Concat(Battle.Aftermath.Party.Where(c => c.IsThrown && !c.IsDead)).ToArray();
-        var allies = Battle.Aftermath.Party.Where(c => !c.IsDead && !c.IsThrown).ToArray();
-        float ew = r.width * .80f / Mathf.Max(1, foes.Length);
-        for (int i = 0; i < foes.Length; i++) Fighter(foes[i], new Rect(r.width * .1f + i * ew, 60, ew, r.height * .53f), foes[i].IsPlayer);
-        float aw = r.width * .72f / Mathf.Max(2, allies.Length);
-        for (int i = 0; i < allies.Length; i++) Fighter(allies[i], new Rect(r.width * .16f + i * aw, r.height * .43f, aw, r.height * .80f), true);
+        var stage = CameraRect(r);
+        stage.xMin = Mathf.Min(stage.xMin, 0);
+        stage.yMin = Mathf.Min(stage.yMin, 0);
+        stage.xMax = Mathf.Max(stage.xMax, r.width);
+        stage.yMax = Mathf.Max(stage.yMax, r.height);
+        BattlePainter.Arena(stage);
+        var foes = Battle.Aftermath.Enemies.Where(e => !e.IsPlayer && !e.HasFled)
+            .Concat(Battle.Aftermath.Party.Where(c => c.IsThrown && !c.IsDead)).ToArray();
+        var allies = Battle.Aftermath.Party.Where(c => (!c.IsDead || c == strikeTarget || c == spoken?.Speaker) && !c.IsThrown).ToArray();
+        float ew = r.width * .82f / Mathf.Max(1, foes.Length);
+        float aw = r.width * .76f / Mathf.Max(2, allies.Length);
+        fighterBounds.Clear();
+        for (int i = 0; i < foes.Length; i++)
+            RememberFighter(foes[i], new Rect(r.width * .09f + i * ew, 48, ew, r.height * .50f));
+        for (int i = 0; i < allies.Length; i++)
+            RememberFighter(allies[i], new Rect(r.width * .17f + i * aw, r.height * .42f, aw, r.height * .74f));
+
+        PrepareTargetHighlight();
+        for (int i = 0; i < foes.Length; i++)
+            Fighter(foes[i], new Rect(r.width * .09f + i * ew, 48, ew, r.height * .50f), foes[i].IsPlayer);
+        for (int i = 0; i < allies.Length; i++)
+            Fighter(allies[i], new Rect(r.width * .17f + i * aw, r.height * .42f, aw, r.height * .74f), true);
     }
+
+    private void RememberFighter(Creature actor, Rect bounds) => fighterBounds[actor] = CharacterArt.Figure(bounds, actor);
+
     private void Fighter(Creature c, Rect r, bool rear)
     {
-        var old = GUI.color; if (c.IsDead) GUI.color = new Color(.45f, .45f, .45f);
-        BattlePainter.Creature(c, r, rear, !Battle.IsOver && Battle.Current == c); GUI.color = old;
-        Text(new Rect(r.x, r.y - 24, r.width, 24), c.Name + (c.HasSurrendered ? " · Rendido" : c.Enraged ? " · Furioso" : c.IsThrown ? " · Lanzado" : ""), centered, c.Enraged ? BattlePainter.Blood : BattlePainter.Paper);
-        if (spoken != null || c.IsDead || c.HasFled || !PlayerTurn) return;
-        if (menu == Menu.TalkTarget && !c.IsPlayer && GUI.Button(r, GUIContent.none, GUIStyle.none)) { target = c; Battle.RecruitmentHint(c); Go(Menu.Talk); }
-        if (menu != Menu.AttackTarget && menu != Menu.Parts || c == Battle.Current || ability == null || ability.Definition.Kind == ActionKind.Charm && c.IsPlayer) return;
+        r = FighterMotion(c, r, rear);
+        var figure = CharacterArt.Figure(r, c);
+        var old = GUI.color;
+        GUI.color = FighterTint(c);
+        var matrix = GUI.matrix;
+        if (c == striker)
+        {
+            float age = Time.unscaledTime - strikeStarted;
+            float lean = age < strikeImpact
+                ? Mathf.Lerp(-4, 8, age / strikeImpact)
+                : Mathf.Lerp(8, 0, (age - strikeImpact) / .24f);
+            float side = strikeTarget != null && fighterBounds.TryGetValue(strikeTarget, out var victim)
+                && victim.center.x < figure.center.x ? -1 : 1;
+            GUIUtility.RotateAroundPivot(lean * side, new Vector2(figure.center.x, figure.yMax - figure.height * .13f));
+        }
+        BattlePainter.Creature(c, r, rear, !Battle.IsOver && Battle.Current == c);
+        GUI.matrix = matrix;
+        GUI.color = old;
+        if (c == strikeTarget) DrawImpact(CharacterArt.Part(r, strikeSlot, rear, c));
+        if (!rear && spoken == null)
+            Text(new Rect(r.x, Mathf.Max(19, figure.y - 40), r.width, 22), c.Name + (c.HasSurrendered ? " · Rendido" : c.Enraged ? " · Furioso" : ""), centered);
+        if (BattleInputLocked || c.IsDead || c.HasFled || !PlayerTurn) return;
+        if (menu == Menu.AttackTarget || menu == Menu.TalkTarget)
+        {
+            bool eligible = menu == Menu.TalkTarget ? !c.IsPlayer : c != Battle.Current && ability != null && (ability.Definition.Kind != ActionKind.Charm || !c.IsPlayer);
+            if (!eligible) return;
+            if (c == highlightedTarget || figure.Contains(Event.current.mousePosition)) TargetPointer(figure);
+            if (!PointerOverBattleUi() && GUI.Button(figure, GUIContent.none, GUIStyle.none))
+            {
+                if (menu == Menu.TalkTarget) { target = c; Battle.RecruitmentHint(c); Go(Menu.Talk); }
+                else ChooseAttackTarget(c);
+            }
+            return;
+        }
+
+        if (menu != Menu.Parts || c != target || ability == null) return;
+        TargetPointer(figure);
+        bool blocked = PointerOverBattleUi();
         foreach (var slot in c.OccupiedSlots)
         {
-            var part = CharacterArt.Part(r, slot, rear);
-            bool overPanel = Event.current.mousePosition.x < 360 && Event.current.mousePosition.y > Screen.height - 330;
-            if (overPanel) continue;
-            if (part.Contains(Event.current.mousePosition)) { BattlePainter.Border(part, BattlePainter.Gold, 2); Text(new Rect(part.x, part.y - 23, 190, 22), (c.IsPlayer ? "ALIADO · " : "") + SlotName(slot), small); }
-            if (GUI.Button(part, GUIContent.none, GUIStyle.none)) { if (Battle.UseAbility(ability, c, ability.Definition.Kind == ActionKind.Charm ? BodySlot.Torso : slot)) Acted(); }
+            var part = CharacterArt.Part(r, slot, rear, c);
+            if (!blocked && part.Contains(Event.current.mousePosition)) highlightedPart = slot;
+            if (highlightedPart == slot)
+            {
+                BattlePainter.Border(part, BattlePainter.Gold, 2);
+                Text(new Rect(part.center.x - 80, part.center.y - 22, 160, 21), SlotName(slot), centered, BattlePainter.Gold);
+            }
+            if (!blocked && GUI.Button(part, GUIContent.none, GUIStyle.none) && Battle.UseAbility(ability, c, slot)) Acted();
         }
     }
-    private Creature[] AttackTargets() => Battle.Creatures.Where(c => c != Battle.Current && !c.IsDead && !c.HasFled && (ability.Definition.Kind != ActionKind.Charm || !c.IsPlayer)).ToArray();
+
+    private Creature[] AttackTargets() => ability == null ? Array.Empty<Creature>() : Battle.Creatures.Where(c => c != Battle.Current && !c.IsDead && !c.HasFled && (ability.Definition.Kind != ActionKind.Charm || !c.IsPlayer)).ToArray();
     private void ChooseAttackTarget(Creature c)
-    { target = c; if (ability.Definition.Kind == ActionKind.Charm) { Battle.UseAbility(ability, c, BodySlot.Torso); Acted(); } Go(Menu.Parts); }
+    { target = c; if (ability.Definition.Kind == ActionKind.Charm) { if (Battle.UseAbility(ability, c, BodySlot.Torso)) Acted(); return; } Go(Menu.Parts); }
     private void DrawBattleMenus()
     {
         if (!Battle.IsOver && !PlayerTurn) { var wait = ListPanel("Turno enemigo", 1); Text(wait, Battle.Current.Name + " prepara su acción…", small); return; }
@@ -64,7 +135,7 @@ public sealed partial class Bootstrap
             var a = ListPanel("Elige una acción", skills.Length + 1, 350);
             for (int i = 0; i < skills.Length; i++)
             {
-                var skill = skills[i]; var row = new Rect(a.x, a.y + i * 36, a.width, 31);
+                var skill = skills[i]; var row = ActionRow(a, i);
                 if (row.Contains(Event.current.mousePosition) || ability == skill)
                 { var info = new Rect(a.xMax + 15, combatPanel.y, Mathf.Min(360, Screen.width - a.xMax - 35), 115); ExplorationArt.Panel(info); Text(new Rect(info.x + 14, info.y + 10, info.width - 28, info.height - 20), Describe(skill.Definition), small); }
                 if (Row(a, i, skill.Definition.Name))
@@ -83,14 +154,21 @@ public sealed partial class Bootstrap
             var a = ListPanel(menu == Menu.TalkTarget ? "¿Con quién hablar?" : "Elige un objetivo", options.Length + 1, 350);
             for (int i = 0; i < options.Length; i++)
                 if (Row(a, i, (options[i].IsPlayer ? "Aliado · " : "") + options[i].Name + (options[i].HasSurrendered ? " · Rendido" : "")))
-                { target = options[i]; if (menu == Menu.TalkTarget) { Battle.RecruitmentHint(target); Go(Menu.Talk); } ChooseAttackTarget(target); }
+                { target = options[i]; if (menu == Menu.TalkTarget) { Battle.RecruitmentHint(target); Go(Menu.Talk); } else ChooseAttackTarget(target); }
             if (Row(a, options.Length, "← Volver")) Go(Menu.Main);
         }
         else if (menu == Menu.Parts)
         {
-            var slots = target.OccupiedSlots.ToArray(); var a = ListPanel(target.Name + (target.IsPlayer ? " · ALIADO" : ""), slots.Length + 1);
-            for (int i = 0; i < slots.Length; i++) if (Row(a, i, SlotName(slots[i]))) { Battle.UseAbility(ability, target, slots[i]); Acted(); }
-            if (Row(a, slots.Length, "← Volver")) Go(Menu.Skills);
+            var a = ListPanel(target.Name + (target.IsPlayer ? " · ALIADO" : ""), AnatomySlots.Length + 1);
+            for (int i = 0; i < AnatomySlots.Length; i++)
+            {
+                var slot = AnatomySlots[i];
+                bool intact = target.GetPiece(slot) != null;
+                if (Row(a, i, SlotName(slot) + (intact ? "" : " · Ausente"), intact, highlightedPart == slot)
+                    && Battle.UseAbility(ability, target, slot)) Acted();
+            }
+            if (Row(a, AnatomySlots.Length, "← Volver")) Go(executionTarget == null ? Menu.AttackTarget : Menu.Skills);
+            DrawTargetAnatomy();
         }
         else if (menu == Menu.Talk) DrawTalkCompact();
         else if (menu == Menu.Aftermath) DrawAftermathCompact();
@@ -166,7 +244,7 @@ public sealed partial class Bootstrap
             var row = new Rect(0, i * 65, view.width - 24, 59);
             if (menu == Menu.Log) Text(row, Battle.Log[count - i - 1], small);
             else if (menu == Menu.Offer && i < gold.Length)
-            { int amount = gold[i]; if (Btn(row, $"{amount} oro · {Battle.Aftermath.NegotiationChance(target, NegotiationChoice.Ofrecer, null, amount):P0}", Battle.Aftermath.CanNegotiate(target, NegotiationChoice.Ofrecer, null, amount))) { Battle.Aftermath.Negotiate(target, NegotiationChoice.Ofrecer, null, amount); Acted(); } }
+            { int amount = gold[i]; if (ItemButton(row, "gold", $"{amount} oro · {Battle.Aftermath.NegotiationChance(target, NegotiationChoice.Ofrecer, null, amount):P0}", Battle.Aftermath.CanNegotiate(target, NegotiationChoice.Ofrecer, null, amount))) { Battle.Aftermath.Negotiate(target, NegotiationChoice.Ofrecer, null, amount); Acted(); } }
             else
             {
                 int index = i - (menu == Menu.Offer ? gold.Length : 0);
@@ -176,25 +254,10 @@ public sealed partial class Bootstrap
         }
         GUI.EndScrollView();
     }
-    private void DrawFocusedSpeech()
-    {
-        BattlePainter.Fill(new Rect(0, 0, Screen.width, Screen.height), new Color(0, 0, 0, .75f));
-        float t = Mathf.Clamp01((Time.unscaledTime - speechStarted) / .4f); float scale = Mathf.SmoothStep(.92f, 1.04f, t);
-        var figure = new Rect(Screen.width * .06f, Screen.height * .08f, Screen.width * .46f * scale, Screen.height * .88f);
-        BattlePainter.Creature(spoken.Speaker, figure, false, false);
-        float width = Screen.width * .43f; float textHeight = label.CalcHeight(new GUIContent(spoken.Text), width - 44);
-        var bubble = new Rect(Screen.width * .50f, Screen.height * .22f, width, Mathf.Max(160, textHeight + 115));
-        ExplorationArt.Panel(bubble);
-        BattlePainter.Line(new Vector2(bubble.x, bubble.y + 70), new Vector2(bubble.x - 27, bubble.y + 95), BattlePainter.Gold, 2);
-        BattlePainter.Line(new Vector2(bubble.x - 27, bubble.y + 95), new Vector2(bubble.x, bubble.y + 103), BattlePainter.Gold, 2);
-        Text(new Rect(bubble.x + 22, bubble.y + 14, bubble.width - 44, 34), spoken.Speaker.Name, heading, BattlePainter.Gold);
-        Text(new Rect(bubble.x + 22, bubble.y + 60, bubble.width - 44, textHeight + 15), spoken.Text, label);
-        if (Btn(new Rect(bubble.x + 22, bubble.yMax - 43, bubble.width - 44, 29), "Continuar · Espacio", Time.unscaledTime - speechStarted > .9f)) spoken = null;
-    }
     private void DrawFinal(Rect r)
     {
         Text(new Rect(r.x, r.y, r.width, 50), Run.State == CampaignState.Victory ? "LA SALIDA ESTÁ ABIERTA" : "LA COSTURA SE HA ROTO", heading, BattlePainter.Gold);
-        Text(new Rect(r.x, r.y + 58, r.width, 50), $"{Run.Inventory.TotalHarvested} partes recuperadas · {Run.TotalRecruited} reclutas · Semilla {Run.Seed}");
+        Text(new Rect(r.x, r.y + 58, r.width, 50), $"{Run.Inventory.TotalHarvested} partes recuperadas · {Run.TotalRecruited} reclutas");
         if (Btn(new Rect(r.x, r.yMax - 55, r.width, 45), "Nueva run")) { Restart(); GUIUtility.ExitGUI(); }
     }
 }

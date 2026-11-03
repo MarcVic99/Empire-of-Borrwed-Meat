@@ -3,15 +3,15 @@ using UnityEngine;
 
 namespace Frankenstein.Presentation
 {
-    // Flat 2D shapes; no scene objects, models or external art assets.
+    // 2D sprite presentation with geometric fallbacks for missing assets.
     public static class BattlePainter
     {
-        public static readonly Color Ink = new Color(.07f, .075f, .07f);
-        public static readonly Color Panel = new Color(.12f, .13f, .12f);
-        public static readonly Color Paper = new Color(.88f, .85f, .74f);
-        public static readonly Color Gold = new Color(.78f, .59f, .31f);
+        public static readonly Color Ink = new Color(27 / 255f, 20 / 255f, 26 / 255f);
+        public static readonly Color Panel = new Color(50 / 255f, 28 / 255f, 39 / 255f);
+        public static readonly Color Paper = new Color(226 / 255f, 204 / 255f, 183 / 255f);
+        public static readonly Color Gold = new Color(193 / 255f, 147 / 255f, 83 / 255f);
         public static readonly Color Green = new Color(.46f, .63f, .40f);
-        public static readonly Color Blood = new Color(.66f, .28f, .25f);
+        public static readonly Color Blood = new Color(135 / 255f, 61 / 255f, 77 / 255f);
         private static Texture2D disc;
         public static void Fill(Rect rect, Color color)
         { var previous = GUI.color; GUI.color = color; GUI.DrawTexture(rect, Texture2D.whiteTexture); GUI.color = previous; }
@@ -42,6 +42,7 @@ namespace Frankenstein.Presentation
 
         public static void Arena(Rect r)
         {
+            if (ImperialArt.Draw("arena", r)) { Fill(r, new Color(.04f, .01f, .03f, .18f)); return; }
             Fill(r, new Color(.105f, .115f, .105f));
             Fill(new Rect(r.x, r.y + r.height * .53f, r.width, r.height * .47f), new Color(.135f, .125f, .105f));
             var stone = new Color(.17f, .18f, .16f);
@@ -109,6 +110,11 @@ namespace Frankenstein.Presentation
 
         public static void Graft(Creature creature, BodySlot slot, Rect r, bool rear)
         {
+            bool left = (slot == BodySlot.BrazoIzq || slot == BodySlot.PiernaIzq) == rear;
+            var spriteRect = r;
+            if (slot == BodySlot.Cabeza) spriteRect = new Rect(r.center.x - r.height * .45f, r.y, r.height * .9f, r.height);
+            else if (slot == BodySlot.BrazoIzq || slot == BodySlot.BrazoDer) spriteRect.height *= .64f;
+            if (ImperialArt.Graft(creature.GetPiece(slot)?.Definition.Id, spriteRect, left)) return;
             DrawPart(creature, slot, r, rear, null);
             if (creature.GetPiece(slot)?.Definition.Id != "cabeza_tentaculos") return;
             for (int i = 0; i < 6; i++)
@@ -129,6 +135,7 @@ namespace Frankenstein.Presentation
                 float handX = c.Profession == Profession.Grafter ? side < 0 ? (rear ? .12f : .18f) : .90f : side < 0 ? .18f : .87f;
                 var grip = new Vector2(r.x + r.width * handX, r.y + r.height * .52f);
                 var tip = grip + new Vector2(side * r.width * .10f, -r.height * .25f);
+                if (ImperialArt.HeldItem(item.Definition.Id, r, grip, side)) continue;
                 string id = item.Definition.Id;
                 if (id == "daga" || id == "aguja") tip = grip + new Vector2(side * r.width * .08f, -r.height * .13f);
                 if (id == "baculo") tip = grip + new Vector2(0, -r.height * .44f);
