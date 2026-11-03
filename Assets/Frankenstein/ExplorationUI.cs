@@ -16,7 +16,7 @@ public sealed partial class Bootstrap
     {
         float x = controls.Movement.x, y = controls.Movement.y;
         bool interact = (controls.Pressed & GameButton.Interact) != 0, toggle = (controls.Pressed & GameButton.Menu) != 0;
-        if (toggle) { if (puzzleMenu) puzzleMenu = false; else worldMenu = !worldMenu; }
+        if (toggle) { if (puzzleMenu) puzzleMenu = false; else if (choosingBalmTarget) choosingBalmTarget = false; else worldMenu = !worldMenu; }
         bool wasWalking = walking;
         walking = false;
         float dt = Mathf.Min(Time.unscaledDeltaTime, .05f);
@@ -30,9 +30,9 @@ public sealed partial class Bootstrap
             if (walking)
             {
                 int direction = Mathf.Abs(x) > Mathf.Abs(y) ? (x < 0 ? 1 : 2) : y < 0 ? 3 : 0;
-                if (!wasWalking || direction != facing) walkDistance = 0;
+                if (!wasWalking) walkDistance = 0;
                 facing = direction;
-                walkDistance = Mathf.Repeat(walkDistance + travelled, 7f / 3f);
+                walkDistance = Mathf.Repeat(walkDistance + travelled, ExplorationArt.WalkCycleDistance);
             }
             if (interact) HandleInteraction();
             Run.Dungeon.Tick(dt);
@@ -45,7 +45,7 @@ public sealed partial class Bootstrap
         int oldFloor = Run.Dungeon.Floor;
         string result = Run.Interact();
         if (oldFloor != Run.Dungeon.Floor) { worldCamera = new Vector2((float)Run.Dungeon.X, (float)Run.Dungeon.Y); facing = 0; }
-        if (result == "grafts") { worldMenu = true; worldTab = 3; graft = null; member = null; }
+        if (result == "grafts") { worldMenu = true; worldTab = 3; member = null; }
         else if (result == "puzzle") { puzzleMenu = true; puzzleFeedback = "Recuerda el orden de la nota del vestíbulo."; }
     }
     private void DrawDungeon()
@@ -112,7 +112,7 @@ public sealed partial class Bootstrap
         ExplorationArt.Panel(new Rect(0, 0, Screen.width, 67));
         Text(new Rect(22, 9, Screen.width * .50f, 26), "Piso " + d.Floor + " / " + Dungeon.LastFloor, heading, BattlePainter.Gold);
         Text(new Rect(23, 36, Screen.width * .60f, 22), $"{ClassName(Run.StartingClass)} · {Run.Party.Count} en el grupo · {Run.Inventory.Gold} oro", small, muted);
-        if (Btn(new Rect(Screen.width - 185, 14, 165, 38), "Menú  [Tab]", true, worldMenu)) { worldMenu = !worldMenu; puzzleMenu = false; GUIUtility.ExitGUI(); }
+        if (Btn(new Rect(Screen.width - 185, 14, 165, 38), "Menú  [Tab]", true, worldMenu)) { worldMenu = !worldMenu; choosingBalmTarget = false; puzzleMenu = false; GUIUtility.ExitGUI(); }
         var foot = new Rect(0, Screen.height - 88, Screen.width, 88); ExplorationArt.Panel(foot);
         Text(new Rect(22, foot.y + 10, Screen.width - 44, 38), Run.Notice, small, BattlePainter.Paper);
         Text(new Rect(22, foot.y + 51, Screen.width - 44, 25), "WASD / Flechas  Moverse     E  Examinar / Usar     Tab / Esc  Menú", small, muted);
@@ -126,10 +126,10 @@ public sealed partial class Bootstrap
         BattlePainter.Fill(new Rect(0, 67, Screen.width, Screen.height - 155), new Color(0, 0, 0, .70f));
         ExplorationArt.Panel(r); float sidebar = Mathf.Clamp(r.width * .18f, 125, 185);
         Text(new Rect(r.x + 20, r.y + 12, r.width - 120, 34), "EL GRUPO", heading, BattlePainter.Gold);
-        if (Btn(new Rect(r.xMax - 100, r.y + 16, 78, 30), "Cerrar")) { worldMenu = false; GUIUtility.ExitGUI(); }
+        if (Btn(new Rect(r.xMax - 100, r.y + 16, 78, 30), "Cerrar")) { worldMenu = false; choosingBalmTarget = false; GUIUtility.ExitGUI(); }
         for (int i = 0; i < worldTabs.Length; i++)
             if (Btn(new Rect(r.x + 16, r.y + 64 + i * 43, sidebar - 18, 36), worldTabs[i], true, worldTab == i))
-            { worldTab = i; member = null; graft = null; selectedGear = null; removalTarget = null; scroll = Vector2.zero; }
+            { worldTab = i; choosingBalmTarget = false; graftSlot = null; graftMessageUntil = 0; member = null; selectedGear = null; removalTarget = null; scroll = Vector2.zero; }
         if (Btn(new Rect(r.x + 16, r.yMax - 55, sidebar - 18, 37), "Nueva run")) { Restart(); GUIUtility.ExitGUI(); }
         var body = new Rect(r.x + sidebar + 12, r.y + 60, r.width - sidebar - 34, r.height - 79);
         if (worldTab == 0) { DrawMapOverview(body); return; }
@@ -138,19 +138,26 @@ public sealed partial class Bootstrap
             Text(new Rect(body.x, body.y, body.width, 32), "DIARIO", heading);
             var view = new Rect(body.x, body.y + 42, body.width, body.height - 42);
             scroll = GUI.BeginScrollView(view, scroll, new Rect(0, 0, view.width - 20, Mathf.Max(view.height, Run.Journal.Count * 100)));
-            for (int i = 0; i < Run.Journal.Count; i++) Text(new Rect(10, i * 100, view.width - 35, 95), Run.Journal[i], label);
+            for (int i = 0; i < Run.Journal.Count; i++) Text(new Rect(10, i * 100, view.width - 35, 95), Run.Journal[i], writtenText);
             if (Run.Journal.Count == 0) Text(new Rect(10, 0, view.width - 30, 80), "Examina los libros y notas con E para conservar sus pistas.", small);
             GUI.EndScrollView(); return;
         }
         if (member != null && (!Run.Party.Contains(member) || member.IsDead)) member = null;
+        if (worldTab == 2) { DrawItemInventory(body); return; }
+        if (worldTab == 3) { DrawGraftMenu(body); return; }
         if (member == null)
         {
-            Text(new Rect(body.x, body.y, body.width, 40), worldTab == 3 ? "¿Quién recibirá el injerto?" : worldTab == 4 ? "¿A quién quieres equipar?" : worldTab == 2 ? "¿A quién afectará el objeto?" : "Elige un personaje", heading);
+            Text(new Rect(body.x, body.y, body.width, 40), worldTab == 4 ? "¿A quién quieres equipar?" : "Elige un personaje", heading);
             var options = Run.Party.Where(c => !c.IsDead).ToArray();
             var cards = new Rect(body.x, body.y + 55, body.width, body.height - 55);
             for (int i = 0; i < options.Length; i++)
             {
                 var c = Cell(cards, i, Mathf.Min(4, options.Length), options.Length);
+                if (worldTab == 1)
+                {
+                    if (DrawPartyCard(c, options[i])) { member = options[i]; scroll = Vector2.zero; GUIUtility.ExitGUI(); }
+                    continue;
+                }
                 if (Btn(c, "")) { member = options[i]; scroll = Vector2.zero; GUIUtility.ExitGUI(); }
                 CharacterArt.Draw(options[i], new Rect(c.x + 12, c.y + 10, c.width - 24, c.height - 58), 0);
                 Text(new Rect(c.x + 15, c.yMax - 43, c.width - 30, 32), options[i].Name, centered);
@@ -162,11 +169,7 @@ public sealed partial class Bootstrap
         body = new Rect(body.x, body.y + 45, body.width, body.height - 45);
         if (worldTab == 1)
         {
-            CharacterArt.Draw(member, new Rect(body.x, body.y, body.width * .33f, body.height - 30), 0);
-            Text(new Rect(body.x + body.width * .36f, body.y, body.width * .64f, 48), $"DEF {member.Defense} · Esquiva {member.Evasion:P0} · Equilibrio {member.BalanceAccuracy:P0}", small);
-            var slots = new Rect(body.x + body.width * .36f, body.y + 54, body.width * .64f, body.height - 115);
-            foreach (BodySlot slot in Enum.GetValues(typeof(BodySlot)))
-            { var part = member.GetPiece(slot); Text(Cell(slots, (int)slot, 2, 6), SlotName(slot) + "\n" + (part == null ? "Ausente" : part.Definition.Name + $"\n{part.Health}/{part.MaxHealth} PV"), small); }
+            DrawPartyAnatomy(body, member);
             if (removalTarget == member)
             {
                 var confirm = new Rect(body.x + body.width * .36f, body.yMax - 62, body.width * .64f, 60);
@@ -179,23 +182,6 @@ public sealed partial class Bootstrap
                 if (Btn(new Rect(body.x + body.width * .36f, body.yMax - 50, body.width * .30f, 40), "Abandonar aliado")) { removalTarget = member; removalHarvest = false; }
                 if (Btn(new Rect(body.x + body.width * .69f, body.yMax - 50, body.width * .31f, 40), "Matar y recuperar")) { removalTarget = member; removalHarvest = true; }
             }
-        }
-        else if (worldTab == 2)
-        {
-            Text(new Rect(body.x, body.y, body.width * .60f, 50), $"{Run.Inventory.Gold} oro · {Run.Inventory.Threads} hilos · {Run.Balms} bálsamos\nUn bálsamo restaura 12 PV por pieza herida, sin reponer miembros.", small);
-            bool wounded = member.OccupiedSlots.Any(s => member.GetPiece(s).Health < member.GetPiece(s).MaxHealth);
-            if (Btn(new Rect(body.x + body.width * .64f, body.y, body.width * .36f, 42), wounded ? "Aplicar bálsamo" : "No necesita bálsamo", wounded && Run.Balms > 0)) Run.UseBalm(member);
-            DrawWorldPieces(new Rect(body.x, body.y + 65, body.width, body.height - 65), false);
-        }
-        else if (worldTab == 3)
-        {
-            string where = Run.Surgeon.Profession == Profession.Grafter ? "Puede trabajar sin mesa" : Run.CanGraft ? "Mesa disponible" : "Necesitas una mesa cercana";
-            Text(new Rect(body.x, body.y, body.width, 53), $"{where} · Operador: {Run.Surgeon.Name} · Coste: {Run.ThreadCost} hilo(s) · Tienes {Run.Inventory.Threads}\nLos torsos no son extraíbles ni admiten injertos.", small, Run.CanGraft ? BattlePainter.Gold : muted);
-            var items = new Rect(body.x, body.y + 63, body.width * .49f, body.height - 63); DrawWorldPieces(items, true);
-            var area = new Rect(body.x + body.width * .52f, body.y + 63, body.width * .48f, body.height - 63);
-            var slots = Enum.GetValues(typeof(BodySlot)).Cast<BodySlot>().Where(s => s != BodySlot.Torso).ToArray();
-            for (int i = 0; i < slots.Length; i++)
-            { var part = member.GetPiece(slots[i]); if (Btn(Cell(area, i, 1, slots.Length), SlotName(slots[i]) + " · " + (part == null ? "Vacío" : part.Definition.Name), Run.CanSew(member, slots[i], graft))) { Run.Sew(member, slots[i], graft); graft = null; GUIUtility.ExitGUI(); } }
         }
         else DrawEquipmentMenu(body);
     }
@@ -220,19 +206,6 @@ public sealed partial class Bootstrap
             { Run.EquipGear(member, slots[i], selectedGear); selectedGear = null; GUIUtility.ExitGUI(); }
             if (Btn(new Rect(row.xMax - remove, row.y, remove, row.height), "Quitar", item != null)) { Run.UnequipGear(member, slots[i]); selectedGear = null; GUIUtility.ExitGUI(); }
         }
-    }
-    private void DrawWorldPieces(Rect r, bool selectable)
-    {
-        var pieces = Run.Inventory.Pieces.ToArray();
-        if (pieces.Length == 0) { Text(r, "No tienes piezas. Busca piezas recuperables en cofres y restos: son escasas.", small, muted); return; }
-        scroll = GUI.BeginScrollView(r, scroll, new Rect(0, 0, r.width - 20, pieces.Length * 82));
-        for (int i = 0; i < pieces.Length; i++)
-        {
-            var row = new Rect(0, i * 82, r.width - 24, 76);
-            if (selectable) { if (ItemButton(row, pieces[i].Definition.Id, PieceText(pieces[i]), true, graft == pieces[i])) graft = pieces[i]; }
-            else { ExplorationArt.Panel(row); ImperialArt.Icon(pieces[i].Definition.Id, new Rect(7, row.y + 12, 46, 46)); Text(new Rect(62, row.y + 3, row.width - 69, row.height - 6), PieceText(pieces[i]), small); }
-        }
-        GUI.EndScrollView();
     }
     private void DrawMapOverview(Rect r)
     {

@@ -152,7 +152,7 @@ public sealed partial class Bootstrap
             figure = new Rect(Screen.width / 2f, Screen.height * .4f, 0, 0);
         figure = CameraRect(figure);
         float width = Mathf.Min(380, Screen.width * .46f);
-        float textHeight = label.CalcHeight(new GUIContent(spoken.Text), width - 30);
+        float textHeight = dialogueText.CalcHeight(new GUIContent(spoken.Text), width - 30);
         float height = textHeight + 72;
         var point = new Vector2(figure.center.x, figure.y + figure.height * .22f);
         float x = figure.xMax + 12;
@@ -163,7 +163,7 @@ public sealed partial class Bootstrap
         BattlePainter.Line(tail, point, BattlePainter.Gold, 1);
         ExplorationArt.Panel(bubble, .98f);
         Text(new Rect(bubble.x + 15, bubble.y + 7, width - 30, 24), spoken.Speaker.Name, small, BattlePainter.Gold);
-        Text(new Rect(bubble.x + 15, bubble.y + 31, width - 30, textHeight), spoken.Text);
+        Text(new Rect(bubble.x + 15, bubble.y + 31, width - 30, textHeight), spoken.Text, dialogueText);
         if (Btn(new Rect(bubble.x + 15, bubble.yMax - 31, width - 30, 25), "Continuar · Espacio", Time.unscaledTime - speechStarted > .9f))
             spoken = null;
     }

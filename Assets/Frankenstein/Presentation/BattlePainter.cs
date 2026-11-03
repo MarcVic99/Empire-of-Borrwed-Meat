@@ -125,7 +125,7 @@ namespace Frankenstein.Presentation
                 Line(bend, bend + new Vector2(side * r.width * .10f, r.height * .45f), new Color(.55f, .53f, .36f), 4);
             }
         }
-        public static void EquipmentOverlay(Creature c, Rect r, bool rear)
+        public static void EquipmentOverlay(Creature c, Rect r, bool rear, System.Func<GearSlot, Vector2> gripPosition = null)
         {
             var drawn = new System.Collections.Generic.HashSet<GearItem>();
             foreach (var hand in new[] { GearSlot.ManoIzq, GearSlot.ManoDer })
@@ -133,7 +133,7 @@ namespace Frankenstein.Presentation
                 var item = c.GetGear(hand); if (item == null || !drawn.Add(item) || !c.CanEquipGear(hand, item)) continue;
                 float side = (hand == GearSlot.ManoIzq) == rear ? -1 : 1;
                 float handX = c.Profession == Profession.Grafter ? side < 0 ? (rear ? .12f : .18f) : .90f : side < 0 ? .18f : .87f;
-                var grip = new Vector2(r.x + r.width * handX, r.y + r.height * .52f);
+                var grip = gripPosition?.Invoke(hand) ?? new Vector2(r.x + r.width * handX, r.y + r.height * .52f);
                 var tip = grip + new Vector2(side * r.width * .10f, -r.height * .25f);
                 if (ImperialArt.HeldItem(item.Definition.Id, r, grip, side)) continue;
                 string id = item.Definition.Id;

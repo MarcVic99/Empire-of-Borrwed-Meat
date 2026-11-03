@@ -7,18 +7,22 @@ namespace Frankenstein.Presentation
         private static readonly Dictionary<string, Texture2D> cache = new Dictionary<string, Texture2D>();
         public static Texture2D Load(string key)
         { if (!cache.TryGetValue(key, out var t)) { t = Resources.Load<Texture2D>("Frankenstein/Exploration/" + key); if (t != null) cache[key] = t; } return t; }
+        public const float WalkCycleDistance = 2.8f;
         public static void Player(Profession role, Rect r, int direction, bool moving, float clock, float walkDistance)
         {
             string key = role == Profession.Hunter ? "topdown-hunter" : role == Profession.Dancer ? "topdown-dancer-v2" : "topdown-grafter-v2";
             var texture = ImperialArt.Load("walk-" + ImperialArt.Role(role)) ?? Load(key); if (texture == null) return;
             if (moving)
             {
-                int frame = Mathf.FloorToInt(Mathf.Repeat(walkDistance * 24f / 7f, 8));
-                // The gait atlas has eight transparent pixels of overscan around each 96 px pose.
-                var pad = r.size / 12;
+                float phase = Mathf.Repeat(walkDistance / WalkCycleDistance, 1);
+                string actor = ImperialArt.Role(role);
+                if (ImperialArt.Draw("walk32-" + actor, r, Mathf.FloorToInt(phase * 8), direction, 8, 4)) return;
+                int frame = Mathf.FloorToInt(phase * 12);
+                // The gait atlas has ten transparent pixels of overscan around each 96 px pose.
+                var pad = r.size * (10f / 96);
                 var gait = new Rect(r.position - pad, r.size + pad * 2);
-                if (ImperialArt.Draw("gait-" + ImperialArt.Role(role), gait, frame, direction, 8, 4)) return;
-                GUI.DrawTextureWithTexCoords(r, texture, FrameUV(role, direction, frame / 2), true);
+                if (ImperialArt.Draw("gait-" + ImperialArt.Role(role), gait, frame, direction, 12, 4)) return;
+                GUI.DrawTextureWithTexCoords(r, texture, FrameUV(role, direction, frame / 3), true);
                 return;
             }
             var uv = FrameUV(role, direction, 0);

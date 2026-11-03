@@ -44,16 +44,20 @@ public static class ImperialArtChecks
             Check(tracks.Length >= 1 && tracks.All(track => AnimationUtility.GetObjectReferenceCurve(clip, track).All(k => k.value is Sprite)), "Sprites válidos: " + clip.name);
         }
         CheckHeadOnlyIdle();
-        var viewport = new Rect(0, 0, 400, 360);
-        var resting = Bootstrap.SelectionArtworkRect(viewport, 2 / 3f, 0); var zoomed = Bootstrap.SelectionArtworkRect(viewport, 2 / 3f, 1);
-        Check(Mathf.Abs(zoomed.width / resting.width - 1.08f) < .001f, "Zoom de artwork controlado");
-        Check(Mathf.Abs(resting.center.x - zoomed.center.x) < .001f, "El zoom conserva el centro horizontal");
+        foreach (var viewport in new[] { new Rect(16, 12, 1334, 744), new Rect(16, 12, 724, 306), new Rect(16, 12, 500, 744) })
+        {
+            var cards = Bootstrap.SelectionCards(viewport, 3);
+            float portraitWidth = (cards.width - 14) / 3;
+            float portraitHeight = cards.height - Mathf.Clamp((viewport.height - 102) * .24f, 87, 130);
+            Check(Mathf.Abs(portraitWidth / portraitHeight - 2f / 3f) < .001f, "Retratos a proporción nativa");
+            Check(cards.xMin >= viewport.xMin - .01f && cards.xMax <= viewport.xMax + .01f, "Tarjetas dentro de la ventana");
+        }
         var spider = Content.Enemy("arana"); var r = new Rect(0, 0, 300, 400);
         var figure = CharacterArt.Figure(r, spider);
         Check(figure.width > figure.height, "Araña conserva silueta ancha");
         Check(CharacterArt.Part(r, BodySlot.PiernaIzq, false, spider).width > 0 && CharacterArt.Part(r, BodySlot.PiernaDer, false, spider).width > 0, "Patas laterales conservadas");
         Check(ImperialArt.EnemyId(Content.Enemy("jefe")) == "jefe", "El jefe no comparte el sprite del ghoul");
-        Debug.Log("Imperio: 27 recursos, 48 frames sin recortes, 32 clips, 12 idles de cabeza y zoom de artwork comprobados.");
+        Debug.Log("Imperio: 27 recursos, 48 frames sin recortes, 32 clips, 12 idles de cabeza y encuadre de retratos comprobados.");
     }
     private static void CheckHeadOnlyIdle()
     {

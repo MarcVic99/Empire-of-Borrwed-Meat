@@ -33,6 +33,7 @@ namespace Frankenstein.Presentation
         }
         public static bool Draw(Creature creature, Rect r, int view)
         {
+            if (view != 2 && HunterCombatArt.Draw(creature, r, view == 1)) return true;
             if (DrawImperial(creature, r, view)) return true;
             string name = creature.Profession == Profession.Hunter ? "hunter" : creature.Profession == Profession.Dancer ? "dancer-v2" : creature.Profession == Profession.Grafter ? "grafter-unarmed" :
                 creature.Appearance == "cabeza_lobo" ? "wolf" : creature.Appearance == "cabeza_ghoul" ? "ghoul" : null;

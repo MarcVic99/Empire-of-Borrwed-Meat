@@ -1,0 +1,156 @@
+const int cell = 96, frames = 8;
+const string resources = "Assets/Frankenstein/Resources/Frankenstein/Imperio/";
+const string sources = "Assets/Frankenstein/ArtSource/Imperio/";
+const string clips = "Assets/Frankenstein/Art/Imperio/Animations/";
+var directions = new[] { "south", "west", "east", "north" };
+var report = new System.Text.StringBuilder();
+foreach (var actor in new[] { "hunter", "dancer", "grafter" })
+{
+    var atlas = new UnityEngine.Texture2D(cell * frames, cell * 4, UnityEngine.TextureFormat.RGBA32, false);
+    var output = new UnityEngine.Color32[cell * frames * cell * 4];
+    var role = actor == "hunter" ? Frankenstein.Profession.Hunter :
+        actor == "dancer" ? Frankenstein.Profession.Dancer : Frankenstein.Profession.Grafter;
+    var idle = new UnityEngine.Texture2D(2, 2);
+    UnityEngine.ImageConversion.LoadImage(idle, System.IO.File.ReadAllBytes(resources + "walk-" + actor + ".png"));
+    for (int direction = 0; direction < directions.Length; direction++)
+    {
+        string sourcePath = sources + "walk32-" + actor + "-" + directions[direction] + ".png";
+        var source = new UnityEngine.Texture2D(2, 2);
+        UnityEngine.ImageConversion.LoadImage(source, System.IO.File.ReadAllBytes(sourcePath));
+        var pixels = source.GetPixels32();
+        var boxes = new UnityEngine.RectInt[frames];
+        for (int frame = 0; frame < frames; frame++)
+        {
+            int x0 = source.width * (frame % 4) / 4, x1 = source.width * (frame % 4 + 1) / 4;
+            int y0 = source.height * (1 - frame / 4) / 2, y1 = source.height * (2 - frame / 4) / 2;
+            int left = x1, right = x0, bottom = y1, top = y0;
+            for (int y = y0; y < y1; y++)
+            for (int x = x0; x < x1; x++)
+            {
+                if (pixels[y * source.width + x].a < 128) continue;
+                left = System.Math.Min(left, x); right = System.Math.Max(right, x);
+                bottom = System.Math.Min(bottom, y); top = System.Math.Max(top, y);
+            }
+            if (right - left < 10 || top - bottom < 10 || left == x0 || right == x1 - 1 || bottom == y0 || top == y1 - 1)
+                throw new System.Exception("Missing pose or gutter: " + sourcePath + " frame " + (frame + 1));
+            boxes[frame] = new UnityEngine.RectInt(left, bottom, right - left + 1, top - bottom + 1);
+        }
+        // The runtime uses this exact idle UV in the same 96-unit frame.
+        var idleUv = Frankenstein.Presentation.ExplorationArt.FrameUV(role, direction, 0);
+        int idleTop = 0, idleBottom = cell, idleLeft = cell, idleRight = 0;
+        for (int y = 0; y < cell; y++)
+        for (int x = 0; x < cell; x++)
+        {
+            float u = idleUv.x + (x + .5f) / cell * idleUv.width;
+            float v = idleUv.y + (y + .5f) / cell * idleUv.height;
+            if (idle.GetPixel(UnityEngine.Mathf.FloorToInt(u * idle.width), UnityEngine.Mathf.FloorToInt(v * idle.height)).a < .5f) continue;
+            idleTop = System.Math.Max(y, idleTop);
+            idleBottom = System.Math.Min(y, idleBottom);
+        }
+        for (int y = idleTop - (idleTop - idleBottom) / 5; y <= idleTop; y++)
+        for (int x = 0; x < cell; x++)
+        {
+            float u = idleUv.x + (x + .5f) / cell * idleUv.width;
+            float v = idleUv.y + (y + .5f) / cell * idleUv.height;
+            if (idle.GetPixel(UnityEngine.Mathf.FloorToInt(u * idle.width), UnityEngine.Mathf.FloorToInt(v * idle.height)).a < .5f) continue;
+            idleLeft = System.Math.Min(x, idleLeft); idleRight = System.Math.Max(x, idleRight);
+        }
+        float idleCenter = (idleLeft + idleRight) * .5f;
+        int tallest = System.Linq.Enumerable.Max(boxes, box => box.height);
+        float scale = (idleTop - idleBottom + 1f) / tallest;
+        var fingerprints = new System.Collections.Generic.HashSet<int>();
+        for (int frame = 0; frame < frames; frame++)
+        {
+            int sourceFrame = actor == "dancer" && direction == 3 ? new[] { 0, 1, 4, 5, 6, 7, 2, 3 }[frame] : frame;
+            var box = boxes[sourceFrame];
+            int headLeft = box.xMax, headRight = box.xMin;
+            for (int y = box.yMax - box.height / 5; y < box.yMax; y++)
+            for (int x = box.xMin; x < box.xMax; x++)
+                if (pixels[y * source.width + x].a >= 128)
+                { headLeft = System.Math.Min(headLeft, x); headRight = System.Math.Max(headRight, x); }
+            float anchor = (headLeft + headRight) * .5f;
+            int top = UnityEngine.Mathf.Min(cell - 3, idleTop) + (frame % 4 == 1 ? -1 : frame % 4 == 3 ? 1 : 0);
+            int fingerprint = 17;
+            for (int y = 1; y < cell - 1; y++)
+            for (int x = 1; x < cell - 1; x++)
+            {
+                int sx = UnityEngine.Mathf.FloorToInt(anchor + (x - idleCenter) / scale);
+                int sy = box.yMax - 1 - UnityEngine.Mathf.FloorToInt((top - y) / scale);
+                if (!box.Contains(new UnityEngine.Vector2Int(sx, sy))) continue;
+                var color = pixels[sy * source.width + sx];
+                if (color.a < 128) continue;
+                color.a = 255;
+                output[((3 - direction) * cell + y) * cell * frames + frame * cell + x] = color;
+                fingerprint = unchecked(fingerprint * 31 + color.GetHashCode() + x * 97 + y);
+            }
+            fingerprints.Add(fingerprint);
+        }
+        if (fingerprints.Count != frames) throw new System.Exception("Duplicate frames: " + sourcePath);
+        report.AppendLine(actor + " " + directions[direction] + ": " + fingerprints.Count + " unique poses");
+        UnityEngine.Object.DestroyImmediate(source);
+    }
+
+    UnityEngine.Object.DestroyImmediate(idle);
+    atlas.SetPixels32(output);
+    atlas.Apply();
+    string path = resources + "walk32-" + actor + ".png";
+    System.IO.File.WriteAllBytes(path, UnityEngine.ImageConversion.EncodeToPNG(atlas));
+    UnityEngine.Object.DestroyImmediate(atlas);
+    UnityEditor.AssetDatabase.ImportAsset(path, UnityEditor.ImportAssetOptions.ForceSynchronousImport);
+    var importer = (UnityEditor.TextureImporter)UnityEditor.AssetImporter.GetAtPath(path);
+    importer.textureType = UnityEditor.TextureImporterType.Sprite;
+    importer.spriteImportMode = UnityEditor.SpriteImportMode.Multiple;
+    importer.spritePixelsPerUnit = 64f * cell / 314f;
+    importer.filterMode = UnityEngine.FilterMode.Point;
+    importer.mipmapEnabled = false;
+    importer.npotScale = UnityEditor.TextureImporterNPOTScale.None;
+    importer.textureCompression = UnityEditor.TextureImporterCompression.Uncompressed;
+    var factory = new UnityEditor.U2D.Sprites.SpriteDataProviderFactories();
+    factory.Init();
+    var provider = factory.GetSpriteEditorDataProviderFromObject(importer);
+    provider.InitSpriteEditorDataProvider();
+    var editor = provider.GetDataProvider<UnityEditor.U2D.Sprites.ISpriteFrameEditCapability>();
+    if (editor == null) throw new System.Exception("Missing sprite editor for " + path);
+    var caps = editor.GetEditCapability();
+    foreach (var flag in new[] { UnityEditor.U2D.Sprites.EEditCapability.CreateAndDeleteSprite,
+        UnityEditor.U2D.Sprites.EEditCapability.EditSpriteRect, UnityEditor.U2D.Sprites.EEditCapability.EditPivot,
+        UnityEditor.U2D.Sprites.EEditCapability.EditSpriteName })
+        if (!caps.HasCapability(flag)) throw new System.Exception("Unsupported edit: " + flag);
+    var old = provider.GetSpriteRects();
+    var records = new UnityEditor.SpriteRect[frames * 4];
+    for (int row = 0; row < 4; row++)
+    for (int frame = 0; frame < frames; frame++)
+    {
+        string name = actor + "-" + directions[row] + "-" + (frame + 1);
+        var previous = System.Array.Find(old, sprite => sprite.name == name);
+        records[row * frames + frame] = new UnityEditor.SpriteRect {
+            name = name, spriteID = previous == null ? UnityEngine.GUID.Generate() : previous.spriteID,
+            rect = new UnityEngine.Rect(frame * cell, (3 - row) * cell, cell, cell),
+            pivot = new UnityEngine.Vector2(.5f, 0), alignment = UnityEngine.SpriteAlignment.BottomCenter
+        };
+    }
+    provider.SetSpriteRects(records);
+    var ids = provider.GetDataProvider<UnityEditor.U2D.Sprites.ISpriteNameFileIdDataProvider>();
+    ids.SetNameFileIdPairs(System.Linq.Enumerable.Select(records, rect => new UnityEditor.SpriteNameFileIdPair(rect.name, rect.spriteID)));
+    provider.Apply();
+    importer.SaveAndReimport();
+    var sprites = System.Linq.Enumerable.ToDictionary(System.Linq.Enumerable.OfType<UnityEngine.Sprite>(
+        UnityEditor.AssetDatabase.LoadAllAssetsAtPath(path)), sprite => sprite.name);
+    if (sprites.Count != 32) throw new System.Exception("Expected 32 sprites in " + path);
+    foreach (var direction in directions)
+    {
+        var clip = UnityEditor.AssetDatabase.LoadAssetAtPath<UnityEngine.AnimationClip>(clips + actor + "-walk-" + direction + ".anim");
+        clip.frameRate = 10;
+        var keys = new UnityEditor.ObjectReferenceKeyframe[frames + 1];
+        for (int i = 0; i <= frames; i++)
+            keys[i] = new UnityEditor.ObjectReferenceKeyframe { time = i / 10f, value = sprites[actor + "-" + direction + "-" + (i % frames + 1)] };
+        var binding = new UnityEditor.EditorCurveBinding { type = typeof(UnityEngine.SpriteRenderer), propertyName = "m_Sprite" };
+        UnityEditor.AnimationUtility.SetObjectReferenceCurve(clip, binding, keys);
+        UnityEditor.AnimationUtility.SetEditorCurve(clip, new UnityEditor.EditorCurveBinding {
+            path = "Head", type = typeof(UnityEngine.GameObject), propertyName = "m_IsActive"
+        }, UnityEngine.AnimationCurve.Constant(0, .8f, 0));
+        UnityEditor.EditorUtility.SetDirty(clip);
+    }
+}
+UnityEditor.AssetDatabase.SaveAssets();
+return report.ToString();

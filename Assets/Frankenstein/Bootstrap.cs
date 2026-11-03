@@ -13,12 +13,14 @@ public sealed partial class Bootstrap : MonoBehaviour
     private Combat observed;
     private CombatAbility ability;
     private Creature target, member, executionTarget;
-    private BodyPiece graft;
+    private bool choosingBalmTarget;
     private GearItem selectedGear;
     private Vector2 scroll;
     private float enemyAt;
-    private GUIStyle label, small, heading, button, centered;
+    private GUIStyle label, small, heading, button, centered, dialogueText, writtenText;
     private int fontSize;
+    private const string FontRoot = "Frankenstein/Fonts/";
+    private Font bodyFont, titleFont, journalFont;
     private Profession selectedClass = Profession.Hunter;
     private Creature hunterPreview, dancerPreview, grafterPreview;
     private readonly Color muted = new Color(.62f, .65f, .62f);
@@ -41,7 +43,7 @@ public sealed partial class Bootstrap : MonoBehaviour
     private void Restart()
     {
         controls.Reset(); clearGuiFocus = true;
-        seed = Guid.NewGuid().GetHashCode() & int.MaxValue; worldMenu = puzzleMenu = false; worldTab = 0;
+        seed = Guid.NewGuid().GetHashCode() & int.MaxValue; worldMenu = puzzleMenu = false; worldTab = 0; choosingBalmTarget = false;
         Run = null; observed = null; spoken = null; scroll = Vector2.zero; member = null; selectedGear = null;
         hunterPreview = Content.Hero(Profession.Hunter); dancerPreview = Content.Hero(Profession.Dancer); grafterPreview = Content.Hero(Profession.Grafter);
     }
@@ -57,7 +59,7 @@ public sealed partial class Bootstrap : MonoBehaviour
             Battle.DeferTurnsForDialogue = true;
             Battle.PresentAttack = BeginStrike;
             Battle.DamagePresented = ShowDamage;
-        } ability = null; target = executionTarget = null; graft = null; spoken = null;
+        } ability = null; target = executionTarget = null; choosingBalmTarget = false; spoken = null;
         menu = Menu.Main; scroll = Vector2.zero; enemyAt = Time.unscaledTime + .9f;
     }
     private bool UpdateSpeech()
@@ -99,10 +101,15 @@ public sealed partial class Bootstrap : MonoBehaviour
     {
         int size = Mathf.Clamp(Mathf.RoundToInt(Screen.height * .022f), 12, 19);
         if (label != null && fontSize == size) return; fontSize = size;
-        label = new GUIStyle(GUI.skin.label) { fontSize = size, wordWrap = true, alignment = TextAnchor.MiddleLeft }; label.normal.textColor = BattlePainter.Paper;
+        bodyFont ??= Resources.Load<Font>(FontRoot + "Alegreya-Medium");
+        titleFont ??= Resources.Load<Font>(FontRoot + "Cinzel-SemiBold");
+        journalFont ??= Resources.Load<Font>(FontRoot + "IMFellEnglishSC-Regular");
+        label = new GUIStyle(GUI.skin.label) { font = bodyFont, fontSize = size, wordWrap = true, alignment = TextAnchor.MiddleLeft }; label.normal.textColor = BattlePainter.Paper;
         small = new GUIStyle(label) { fontSize = Mathf.Max(10, size - 3) };
-        heading = new GUIStyle(label) { fontSize = size + 5, fontStyle = FontStyle.Bold };
+        heading = new GUIStyle(label) { font = titleFont ?? bodyFont, fontSize = size + 4, fontStyle = FontStyle.Normal };
         button = new GUIStyle(label) { alignment = TextAnchor.MiddleLeft, padding = new RectOffset(14, 9, 4, 4) };
+        dialogueText = new GUIStyle(label) { fontSize = size + 1 };
+        writtenText = new GUIStyle(label) { font = journalFont ?? bodyFont, fontSize = Mathf.Max(16, size + 1) };
         centered = new GUIStyle(small) { alignment = TextAnchor.MiddleCenter };
     }
     private void OnGUI()
